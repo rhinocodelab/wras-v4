@@ -2406,8 +2406,26 @@ export async function translateTextToMultipleLanguages(text: string): Promise<{ 
             gu: customTranslationGu || text
         });
         
+        // For custom translations, we need to translate to English if the input is not English
+        let englishTranslation = text;
+        if (customTranslationHi || customTranslationMr || customTranslationGu) {
+            // If we have custom translations, the input is likely English
+            englishTranslation = text;
+        } else {
+            // If no custom translations, we need to translate to English
+            try {
+                const { Translate } = await import('@google-cloud/translate/build/src/v2');
+                const translate = new Translate();
+                const [enResult] = await translate.translate(text, 'en');
+                englishTranslation = Array.isArray(enResult[0]) ? enResult[0][0] : enResult[0];
+            } catch (error) {
+                console.error('Error translating to English:', error);
+                englishTranslation = text;
+            }
+        }
+        
         return {
-            en: text,
+            en: englishTranslation,
             mr: customTranslationMr || text,
             hi: customTranslationHi || text,
             gu: customTranslationGu || text
@@ -2427,16 +2445,16 @@ export async function translateTextToMultipleLanguages(text: string): Promise<{ 
         // Creates a client using the Translate class
         const translate = new Translate();
         
-        // For English, return the original text (no translation needed)
-        // Translate to all three languages in parallel
-        const [mrResult, hiResult, guResult] = await Promise.all([
+        // Translate to all four languages in parallel
+        const [enResult, mrResult, hiResult, guResult] = await Promise.all([
+            translate.translate(text, 'en').catch(() => [text]),
             translate.translate(text, 'mr').catch(() => [text]),
             translate.translate(text, 'hi').catch(() => [text]),
             translate.translate(text, 'gu').catch(() => [text])
         ]);
         
         const result = {
-            en: text, // English is the same as input text
+            en: Array.isArray(enResult[0]) ? enResult[0][0] : enResult[0],
             mr: Array.isArray(mrResult[0]) ? mrResult[0][0] : mrResult[0],
             hi: Array.isArray(hiResult[0]) ? hiResult[0][0] : hiResult[0],
             gu: Array.isArray(guResult[0]) ? guResult[0][0] : guResult[0]
