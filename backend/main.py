@@ -48,6 +48,7 @@ LANGUAGE_MAPPING = {
     'gu': {'name': 'ગુજરાતી (Gujarati)', 'code': 'gu-IN'},
 }
 
+
 def load_whisper_model():
     """Load the Whisper model on startup"""
     global whisper_model

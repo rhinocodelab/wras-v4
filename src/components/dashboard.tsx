@@ -46,14 +46,21 @@ const LANGUAGE_MAP: { [key: string]: string } = {
 };
 
 
-const IslVideoPlayer = ({ playlist }: { playlist: string[] }) => {
+const IslVideoPlayer = ({ playlist, onPublish }: { playlist: string[]; onPublish?: (playbackSpeed: number) => void }) => {
     const videoRef = useRef<HTMLVideoElement>(null);
+    const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
 
     useEffect(() => {
         if (videoRef.current && playlist.length > 0) {
             videoRef.current.play();
         }
     }, [playlist]);
+
+    useEffect(() => {
+        if (videoRef.current) {
+            videoRef.current.playbackRate = playbackSpeed;
+        }
+    }, [playbackSpeed]);
 
     if (!playlist || playlist.length === 0) {
         return (
@@ -84,6 +91,39 @@ const IslVideoPlayer = ({ playlist }: { playlist: string[] }) => {
                 <div className="mt-2 text-xs text-muted-foreground break-all">
                    Video: {playlist[0].split('/').pop()?.replace('.mp4', '').replace(/_/g, ' ')}
                 </div>
+                
+                {/* Playback Speed Controls */}
+                <div className="mt-3">
+                    <label className="text-xs font-medium text-muted-foreground">Playback Speed:</label>
+                    <div className="flex gap-1 mt-1">
+                        {[0.5, 0.75, 1.0, 1.25, 1.5, 2.0].map((speed) => (
+                            <Button
+                                key={speed}
+                                variant={playbackSpeed === speed ? "default" : "outline"}
+                                size="sm"
+                                className="h-6 px-2 text-xs"
+                                onClick={() => setPlaybackSpeed(speed)}
+                            >
+                                {speed}x
+                            </Button>
+                        ))}
+                    </div>
+                </div>
+                
+                {/* Publish Button */}
+                {onPublish && playlist.length > 0 && (
+                    <div className="mt-3">
+                        <Button 
+                            onClick={() => onPublish(playbackSpeed)} 
+                            className="w-full" 
+                            size="sm"
+                            disabled={playlist.length === 0}
+                        >
+                            <Rocket className="mr-2 h-4 w-4" />
+                            Publish Announcement
+                        </Button>
+                    </div>
+                )}
             </div>
         </div>
     );
@@ -235,7 +275,7 @@ export function Dashboard() {
     }
   };
 
-  const handlePreviewPublishedAnnouncement = () => {
+  const handlePreviewPublishedAnnouncement = (selectedPlaybackSpeed: number = 1.0) => {
     if (!generatedData || !currentRouteInfo) return;
 
     const { announcements, isl_video_playlist } = generatedData;
@@ -314,6 +354,7 @@ export function Dashboard() {
           const introAudioPath = '${baseUrl}/audio/intro_audio/intro.wav';
           let currentAudioIndex = 0;
           let isPlaying = false;
+          let currentSpeed = ${selectedPlaybackSpeed};
           let isPlayingIntro = false;
 
           // Set up intro audio
@@ -340,6 +381,14 @@ export function Dashboard() {
                 tickerWrap.style.transform = 'translateX(-50%)';
               }, 50); // Small delay to ensure text is rendered
             }
+          }
+          
+          function changeSpeed(speed) {
+            currentSpeed = speed;
+            if (videoElement) {
+              videoElement.playbackRate = speed;
+            }
+            console.log('Playback speed changed to:', speed + 'x');
           }
 
           function fadeTickerText() {
@@ -378,6 +427,7 @@ export function Dashboard() {
              if (videoPlaylist.length > 0) {
                 videoElement.src = videoPlaylist[0];
                 videoElement.loop = true;
+                videoElement.playbackRate = currentSpeed;
                 videoElement.play().catch(e => console.error("Video play error:", e));
                 
                 // Ensure video restarts when it ends (backup for loop)
@@ -416,6 +466,16 @@ export function Dashboard() {
           
           // Use a more reliable event to start playback
           window.addEventListener('load', startPlayback, { once: true });
+          
+          // Add keyboard shortcuts for speed control
+          document.addEventListener('keydown', (e) => {
+            if (e.key === '1') changeSpeed(0.5);
+            else if (e.key === '2') changeSpeed(0.75);
+            else if (e.key === '3') changeSpeed(1.0);
+            else if (e.key === '4') changeSpeed(1.25);
+            else if (e.key === '5') changeSpeed(1.5);
+            else if (e.key === '6') changeSpeed(2.0);
+          });
         <\/script>
       </body>
       </html>
@@ -505,6 +565,7 @@ export function Dashboard() {
           const introAudioPath = '${baseUrl}/audio/intro_audio/intro.wav';
           let currentAudioIndex = 0;
           let isPlaying = false;
+          let currentSpeed = ${selectedPlaybackSpeed};
           let isPlayingIntro = false;
 
           // Set up intro audio
@@ -531,6 +592,14 @@ export function Dashboard() {
                 tickerWrap.style.transform = 'translateX(-50%)';
               }, 50); // Small delay to ensure text is rendered
             }
+          }
+          
+          function changeSpeed(speed) {
+            currentSpeed = speed;
+            if (videoElement) {
+              videoElement.playbackRate = speed;
+            }
+            console.log('Playback speed changed to:', speed + 'x');
           }
 
           function fadeTickerText() {
@@ -569,6 +638,7 @@ export function Dashboard() {
              if (videoPlaylist.length > 0) {
                 videoElement.src = videoPlaylist[0];
                 videoElement.loop = true;
+                videoElement.playbackRate = currentSpeed;
                 videoElement.play().catch(e => console.error("Video play error:", e));
                 
                 // Ensure video restarts when it ends (backup for loop)
@@ -607,6 +677,16 @@ export function Dashboard() {
           
           // Use a more reliable event to start playback
           window.addEventListener('load', startPlayback, { once: true });
+          
+          // Add keyboard shortcuts for speed control
+          document.addEventListener('keydown', (e) => {
+            if (e.key === '1') changeSpeed(0.5);
+            else if (e.key === '2') changeSpeed(0.75);
+            else if (e.key === '3') changeSpeed(1.0);
+            else if (e.key === '4') changeSpeed(1.25);
+            else if (e.key === '5') changeSpeed(1.5);
+            else if (e.key === '6') changeSpeed(2.0);
+          });
         <\/script>
       </body>
       </html>
@@ -920,7 +1000,7 @@ export function Dashboard() {
                 </div>
 
                 <div className="h-full overflow-hidden">
-                     {generatedData && <IslVideoPlayer playlist={generatedData.isl_video_playlist} />}
+                     {generatedData && <IslVideoPlayer playlist={generatedData.isl_video_playlist} onPublish={handlePreviewPublishedAnnouncement} />}
                 </div>
 
              </div>

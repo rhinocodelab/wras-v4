@@ -22,9 +22,15 @@ export async function POST(request: NextRequest) {
       // Directory might already exist, ignore error
     }
 
-    // Generate unique filename
+    // Generate unique filename with appropriate extension
     const audioId = randomUUID();
-    const filename = `${audioId}.webm`;
+    let extension = 'webm'; // default
+    if (mimeType === 'audio/wav') {
+      extension = 'wav';
+    } else if (mimeType === 'audio/mpeg') {
+      extension = 'mp3';
+    }
+    const filename = `${audioId}.${extension}`;
     const filePath = join(tempDir, filename);
 
     // Convert base64 audio to buffer and save
@@ -37,7 +43,8 @@ export async function POST(request: NextRequest) {
       audioId: audioId,
       filename: filename,
       filePath: `/temp-audio/${filename}`,
-      mimeType: mimeType || 'audio/webm'
+      mimeType: mimeType || 'audio/webm',
+      extension: extension
     });
 
   } catch (error) {

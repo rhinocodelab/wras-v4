@@ -15,14 +15,21 @@ const SUPPORTED_LANGUAGES = [
   { code: 'gu-IN', name: 'ગુજરાતી (Gujarati)' },
 ];
 
-const IslVideoPlayer = ({ playlist, title, onPublish }: { playlist: string[]; title: string; onPublish?: () => void }) => {
+const IslVideoPlayer = ({ playlist, title, onPublish }: { playlist: string[]; title: string; onPublish?: (playbackSpeed: number) => void }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
 
   useEffect(() => {
     if (videoRef.current && playlist.length > 0) {
       videoRef.current.play();
     }
   }, [playlist]);
+
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.playbackRate = playbackSpeed;
+    }
+  }, [playbackSpeed]);
 
   if (!playlist || playlist.length === 0) {
     return (
@@ -62,11 +69,29 @@ const IslVideoPlayer = ({ playlist, title, onPublish }: { playlist: string[]; ti
             <div className="mt-1 text-xs text-muted-foreground break-all">
               Video: {playlist[0].split('/').pop()?.replace('.mp4', '').replace(/_/g, ' ')}
             </div>
+            
+            {/* Playback Speed Controls */}
+            <div className="mt-2">
+              <label className="text-xs font-medium text-muted-foreground">Playback Speed:</label>
+              <div className="flex gap-1 mt-1">
+                {[0.5, 0.75, 1.0, 1.25, 1.5, 2.0].map((speed) => (
+                  <Button
+                    key={speed}
+                    variant={playbackSpeed === speed ? "default" : "outline"}
+                    size="sm"
+                    className="h-6 px-2 text-xs"
+                    onClick={() => setPlaybackSpeed(speed)}
+                  >
+                    {speed}x
+                  </Button>
+                ))}
+              </div>
+            </div>
           </div>
           {onPublish && playlist.length > 0 && (
             <div className="mt-4">
               <Button 
-                onClick={onPublish} 
+                onClick={() => onPublish?.(playbackSpeed)} 
                 className="w-full" 
                 size="sm"
                 disabled={playlist.length === 0}
@@ -388,7 +413,7 @@ export default function AutoSpeechDetectionPage() {
     }
   }, [translations, toast]);
 
-  const handlePublish = () => {
+  const handlePublish = (selectedPlaybackSpeed: number = 1.0) => {
     const englishText = translations['en-IN'];
     if (!englishText && !transcribedText) return;
 
@@ -462,6 +487,7 @@ export default function AutoSpeechDetectionPage() {
         <script>
             const videoSources = ${videoSources};
             let currentVideoIndex = 0;
+            let currentSpeed = ${selectedPlaybackSpeed};
             const videoElement = document.getElementById('videoPlayer');
             
             function playNextVideo() {
@@ -471,15 +497,32 @@ export default function AutoSpeechDetectionPage() {
                 }
             }
             
+            function changeSpeed(speed) {
+                currentSpeed = speed;
+                videoElement.playbackRate = speed;
+                console.log('Playback speed changed to:', speed + 'x');
+            }
+            
             videoElement.addEventListener('ended', playNextVideo);
             
             function startPlayback() {
                 if (videoSources.length > 0) {
                     videoElement.src = videoSources[0];
                     videoElement.loop = true;
+                    videoElement.playbackRate = currentSpeed;
                     videoElement.play().catch(e => console.error("Video play error:", e));
                 }
             }
+            
+            // Add keyboard shortcuts for speed control
+            document.addEventListener('keydown', (e) => {
+                if (e.key === '1') changeSpeed(0.5);
+                else if (e.key === '2') changeSpeed(0.75);
+                else if (e.key === '3') changeSpeed(1.0);
+                else if (e.key === '4') changeSpeed(1.25);
+                else if (e.key === '5') changeSpeed(1.5);
+                else if (e.key === '6') changeSpeed(2.0);
+            });
             
             window.addEventListener('load', startPlayback, { once: true });
         </script>

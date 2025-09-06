@@ -9,20 +9,29 @@ import { Textarea } from '@/components/ui/textarea';
 import { Loader2, Languages, MessageSquare, Video, Text, Film, Rocket, Globe, Volume2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { translateInputText, getIslVideoPlaylist, translateTextToMultipleLanguages, generateTextToSpeech, saveTextToIslAudio } from '@/app/actions';
+// Audio generation and saving functions commented out for future use:
+// generateTextToSpeech, saveTextToIslAudio
 import { generateTextToIslHtml } from '@/lib/utils';
 
 // Source language is fixed to English only
 const SOURCE_LANGUAGE = 'en';
 
-const IslVideoPlayer = ({ playlist, title }: { playlist: string[]; title: string }) => {
+const IslVideoPlayer = ({ playlist, title, onPublish }: { playlist: string[]; title: string; onPublish?: (playbackSpeed: number) => void }) => {
     const videoRef = useRef<HTMLVideoElement>(null);
     const [currentVideoIndex, setCurrentVideoIndex] = useState(0);
+    const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
 
     useEffect(() => {
         if (videoRef.current && playlist.length > 0) {
             videoRef.current.play();
         }
     }, [playlist, currentVideoIndex]);
+
+    useEffect(() => {
+        if (videoRef.current) {
+            videoRef.current.playbackRate = playbackSpeed;
+        }
+    }, [playbackSpeed]);
 
     const handleVideoEnd = () => {
         if (currentVideoIndex < playlist.length - 1) {
@@ -75,6 +84,39 @@ const IslVideoPlayer = ({ playlist, title }: { playlist: string[]; title: string
                     <div className="mt-1 text-xs text-muted-foreground">
                         Total videos: {playlist.length}
                     </div>
+                    
+                    {/* Playback Speed Controls */}
+                    <div className="mt-2">
+                        <label className="text-xs font-medium text-muted-foreground">Playback Speed:</label>
+                        <div className="flex gap-1 mt-1">
+                            {[0.5, 0.75, 1.0, 1.25, 1.5, 2.0].map((speed) => (
+                                <Button
+                                    key={speed}
+                                    variant={playbackSpeed === speed ? "default" : "outline"}
+                                    size="sm"
+                                    className="h-6 px-2 text-xs"
+                                    onClick={() => setPlaybackSpeed(speed)}
+                                >
+                                    {speed}x
+                                </Button>
+                            ))}
+                        </div>
+                    </div>
+                    
+                    {/* Publish Button */}
+                    {onPublish && playlist.length > 0 && (
+                        <div className="mt-3">
+                            <Button 
+                                onClick={() => onPublish(playbackSpeed)} 
+                                className="w-full" 
+                                size="sm"
+                                disabled={playlist.length === 0}
+                            >
+                                <Rocket className="mr-2 h-4 w-4" />
+                                Publish Announcement
+                            </Button>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
@@ -93,14 +135,15 @@ export default function TextToIslPage() {
         gu: ''
     });
     const [isTranslating, setIsTranslating] = useState(false);
-    const [savedAudioFiles, setSavedAudioFiles] = useState<{ en?: string; mr?: string; hi?: string; gu?: string }>({});
-    const [islVideoPath, setIslVideoPath] = useState<string>('');
-    const [audioStates, setAudioStates] = useState<{ [key: string]: { url: string; isGenerating: boolean } }>({});
-    const [isPublishing, setIsPublishing] = useState(false);
-    const [bulkAudioModal, setBulkAudioModal] = useState<{ isOpen: boolean; progress: { [key: string]: boolean } }>({ 
-        isOpen: false, 
-        progress: { english: false, marathi: false, hindi: false, gujarati: false } 
-    });
+    // Audio-related state variables commented out for future use:
+    // const [savedAudioFiles, setSavedAudioFiles] = useState<{ en?: string; mr?: string; hi?: string; gu?: string }>({});
+    const [islVideoPath, setIslVideoPath] = useState<string>(''); // Keep for video generation
+    // const [audioStates, setAudioStates] = useState<{ [key: string]: { url: string; isGenerating: boolean } }>({});
+    const [isPublishing, setIsPublishing] = useState(false); // Keep for UI state management
+    // const [bulkAudioModal, setBulkAudioModal] = useState<{ isOpen: boolean; progress: { [key: string]: boolean } }>({ 
+    //     isOpen: false, 
+    //     progress: { english: false, marathi: false, hindi: false, gujarati: false } 
+    // });
 
     const { toast } = useToast();
 
@@ -131,138 +174,141 @@ export default function TextToIslPage() {
         }
     }, [inputText, toast]);
 
-    const handleTtsClick = async (text: string, language: string) => {
-        if (!text.trim()) return;
-        
-        // Set generating state for this specific language
-        setAudioStates(prev => ({
-            ...prev,
-            [language]: { ...prev[language], isGenerating: true }
-        }));
-        
-        try {
-            const audioDataUrl = await generateTextToSpeech(text, language);
-            
-            // Set the audio URL for this specific language
-            setAudioStates(prev => ({
-                ...prev,
-                [language]: { url: audioDataUrl, isGenerating: false }
-            }));
-            
-            toast({
-                title: "Audio Generated",
-                description: `${language} audio has been generated successfully.`
-            });
-        } catch (error) {
-            console.error("Audio generation failed:", error);
-            toast({
-                variant: "destructive",
-                title: "Generation Error",
-                description: "Failed to generate audio."
-            });
-            
-            // Reset generating state on error
-            setAudioStates(prev => ({
-                ...prev,
-                [language]: { ...prev[language], isGenerating: false }
-            }));
-        }
-    };
+    // Audio generation function commented out for future use:
+    // const handleTtsClick = async (text: string, language: string) => {
+    //     if (!text.trim()) return;
+    //     
+    //     // Set generating state for this specific language
+    //     setAudioStates(prev => ({
+    //         ...prev,
+    //         [language]: { ...prev[language], isGenerating: true }
+    //     }));
+    //     
+    //     try {
+    //         const audioDataUrl = await generateTextToSpeech(text, language);
+    //         
+    //         // Set the audio URL for this specific language
+    //         setAudioStates(prev => ({
+    //             ...prev,
+    //             [language]: { url: audioDataUrl, isGenerating: false }
+    //         }));
+    //         
+    //         toast({
+    //             title: "Audio Generated",
+    //             description: `${language} audio has been generated successfully.`
+    //         });
+    //     } catch (error) {
+    //         console.error("Audio generation failed:", error);
+    //         toast({
+    //             variant: "destructive",
+    //             title: "Generation Error",
+    //             description: "Failed to generate audio."
+    //         });
+    //         
+    //         // Reset generating state on error
+    //         setAudioStates(prev => ({
+    //             ...prev,
+    //             [language]: { ...prev[language], isGenerating: false }
+    //         }));
+    //     }
+    // };
 
-    const handleSaveAudio = async (language: string, text: string) => {
-        const audioState = audioStates[language];
-        if (!audioState?.url) return;
-        
-        try {
-            // Use original English text for filename, translated text for content
-            const originalText = inputText.trim();
-            const result = await saveTextToIslAudio(audioState.url, language, originalText);
-            
-            // Map language to correct key for savedAudioFiles
-            const languageMap: { [key: string]: string } = {
-                'english': 'en',
-                'marathi': 'mr',
-                'hindi': 'hi',
-                'gujarati': 'gu'
-            };
-            const saveKey = languageMap[language] || language;
-            
-            // Track saved audio file for publishing
-            setSavedAudioFiles(prev => ({
-                ...prev,
-                [saveKey]: result.filePath
-            }));
-            
-            toast({
-                title: "Audio Saved",
-                description: `Audio file has been saved successfully.`
-            });
-        } catch (error) {
-            console.error("Audio save failed:", error);
-            toast({
-                variant: "destructive",
-                title: "Save Error",
-                description: "Failed to save audio file."
-            });
-        }
-    };
+    // Audio saving function commented out for future use:
+    // const handleSaveAudio = async (language: string, text: string) => {
+    //     const audioState = audioStates[language];
+    //     if (!audioState?.url) return;
+    //     
+    //     try {
+    //         // Use original English text for filename, translated text for content
+    //         const originalText = inputText.trim();
+    //         const result = await saveTextToIslAudio(audioState.url, language, originalText);
+    //         
+    //         // Map language to correct key for savedAudioFiles
+    //         const languageMap: { [key: string]: string } = {
+    //             'english': 'en',
+    //             'marathi': 'mr',
+    //             'hindi': 'hi',
+    //             'gujarati': 'gu'
+    //         };
+    //         const saveKey = languageMap[language] || language;
+    //         
+    //         // Track saved audio file for publishing
+    //         setSavedAudioFiles(prev => ({
+    //             ...prev,
+    //             [saveKey]: result.filePath
+    //         }));
+    //         
+    //         toast({
+    //             title: "Audio Saved",
+    //             description: `Audio file has been saved successfully.`
+    //         });
+    //     } catch (error) {
+    //         console.error("Audio save failed:", error);
+    //         toast({
+    //             variant: "destructive",
+    //             title: "Save Error",
+    //             description: "Failed to save audio file."
+    //         });
+    //     }
+    // };
 
-    const handleSaveAllAudio = async () => {
-        const languages = [
-            { key: 'english', saveKey: 'en', text: translations.en, label: 'English' },
-            { key: 'marathi', saveKey: 'mr', text: translations.mr, label: 'Marathi' },
-            { key: 'hindi', saveKey: 'hi', text: translations.hi, label: 'Hindi' },
-            { key: 'gujarati', saveKey: 'gu', text: translations.gu, label: 'Gujarati' }
-        ];
+    // Bulk audio saving function commented out for future use:
+    // const handleSaveAllAudio = async () => {
+    //     const languages = [
+    //         { key: 'english', saveKey: 'en', text: translations.en, label: 'English' },
+    //         { key: 'marathi', saveKey: 'mr', text: translations.mr, label: 'Marathi' },
+    //         { key: 'hindi', saveKey: 'hi', text: translations.hi, label: 'Hindi' },
+    //         { key: 'gujarati', saveKey: 'gu', text: translations.gu, label: 'Gujarati' }
+    //     ];
 
-        let savedCount = 0;
-        let totalCount = 0;
+    //     let savedCount = 0;
+    //     let totalCount = 0;
 
-        // Use original English text for all filenames
-        const originalText = inputText.trim();
+    //     // Use original English text for all filenames
+    //     const originalText = inputText.trim();
 
-        for (const { key, saveKey, text, label } of languages) {
-            const audioState = audioStates[key];
-            if (audioState?.url && text.trim()) {
-                totalCount++;
-                try {
-                    const result = await saveTextToIslAudio(audioState.url, key, originalText);
-                    // Save to the correct key in savedAudioFiles
-                    setSavedAudioFiles(prev => ({
-                        ...prev,
-                        [saveKey]: result.filePath
-                    }));
-                    savedCount++;
-                } catch (error) {
-                    console.error(`Failed to save ${label} audio:`, error);
-                }
-            }
-        }
+    //     for (const { key, saveKey, text, label } of languages) {
+    //         const audioState = audioStates[key];
+    //         if (audioState?.url && text.trim()) {
+    //             totalCount++;
+    //             try {
+    //                 const result = await saveTextToIslAudio(audioState.url, key, originalText);
+    //                 // Save to the correct key in savedAudioFiles
+    //                 setSavedAudioFiles(prev => ({
+    //                     ...prev,
+    //                     [saveKey]: result.filePath
+    //                 }));
+    //                 savedCount++;
+    //             } catch (error) {
+    //                 console.error(`Failed to save ${label} audio:`, error);
+    //             }
+    //         }
+    //     }
 
-        if (totalCount === 0) {
-            toast({
-                variant: "destructive",
-                title: "No Audio Files",
-                description: "No audio files to save. Please generate audio first."
-            });
-            return;
-        }
+    //     if (totalCount === 0) {
+    //         toast({
+    //             variant: "destructive",
+    //             title: "No Audio Files",
+    //             description: "No audio files to save. Please generate audio first."
+    //         });
+    //         return;
+    //     }
 
-        if (savedCount === totalCount) {
-            toast({
-                title: "All Audio Saved",
-                description: `Successfully saved ${savedCount} audio file(s).`
-            });
-        } else {
-            toast({
-                variant: "destructive",
-                title: "Partial Save",
-                description: `Saved ${savedCount} of ${totalCount} audio file(s).`
-            });
-        }
-    };
+    //     if (savedCount === totalCount) {
+    //         toast({
+    //             title: "All Audio Saved",
+    //             description: `Successfully saved ${savedCount} audio file(s).`
+    //         });
+    //     } else {
+    //         toast({
+    //             variant: "destructive",
+    //             title: "Partial Save",
+    //             description: `Saved ${savedCount} of ${totalCount} audio file(s).`
+    //         });
+    //     }
+    // };
 
-    const handlePublish = async () => {
+    const handlePublish = async (selectedPlaybackSpeed: number = 1.0) => {
         if (!inputText.trim()) {
             toast({
                 variant: "destructive",
@@ -281,14 +327,15 @@ export default function TextToIslPage() {
             return;
         }
 
-        if (!Object.values(savedAudioFiles).some(path => path)) {
-            toast({
-                variant: "destructive",
-                title: "No Saved Audio Files",
-                description: "Please save audio files first before publishing."
-            });
-            return;
-        }
+        // Audio validation commented out for future use:
+        // if (!Object.values(savedAudioFiles).some(path => path)) {
+        //     toast({
+        //         variant: "destructive",
+        //         title: "No Saved Audio Files",
+        //         description: "Please save audio files first before publishing."
+        //     });
+        //     return;
+        // }
 
         if (!islPlaylist || islPlaylist.length === 0) {
             toast({
@@ -299,16 +346,17 @@ export default function TextToIslPage() {
             return;
         }
 
-        setIsPublishing(true);
+        setIsPublishing(true); // Keep for UI state management
 
         try {
+            // Audio files section commented out for future use:
             // Get all available audio files - use saved file paths instead of data URLs
-            const audioFiles = {
-                en: savedAudioFiles.en,
-                mr: savedAudioFiles.mr,
-                hi: savedAudioFiles.hi,
-                gu: savedAudioFiles.gu
-            };
+            // const audioFiles = {
+            //     en: savedAudioFiles.en,
+            //     mr: savedAudioFiles.mr,
+            //     hi: savedAudioFiles.hi,
+            //     gu: savedAudioFiles.gu
+            // };
 
             // Get all translations
             const allTranslations = {
@@ -321,8 +369,8 @@ export default function TextToIslPage() {
             // Get ISL video path (use the first video in playlist for now)
             const islVideoPath = islPlaylist[0] || '';
 
-            // Generate HTML content directly
-            const htmlContent = generateTextToIslHtml(inputText, allTranslations, islVideoPath, audioFiles);
+            // Generate HTML content directly (audio files commented out for future use)
+            const htmlContent = generateTextToIslHtml(inputText, allTranslations, islVideoPath, {}, selectedPlaybackSpeed);
 
             // Create blob and open in new tab (like Dashboard)
             const blob = new Blob([htmlContent], { type: 'text/html' });
@@ -342,92 +390,93 @@ export default function TextToIslPage() {
                 description: "Failed to publish the announcement."
             });
         } finally {
-            setIsPublishing(false);
+            setIsPublishing(false); // Keep for UI state management
         }
     };
 
-    const handleGenerateAllAudio = async () => {
-        if (!translations.en && !translations.mr && !translations.hi && !translations.gu) {
-            toast({
-                variant: "destructive",
-                title: "No Translations",
-                description: "Please generate translations first."
-            });
-            return;
-        }
+    // Bulk audio generation function commented out for future use:
+    // const handleGenerateAllAudio = async () => {
+    //     if (!translations.en && !translations.mr && !translations.hi && !translations.gu) {
+    //         toast({
+    //             variant: "destructive",
+    //             title: "No Translations",
+    //             description: "Please generate translations first."
+    //         });
+    //         return;
+    //     }
 
-        // Open modal and reset progress
-        setBulkAudioModal({
-            isOpen: true,
-            progress: { english: false, marathi: false, hindi: false, gujarati: false }
-        });
+    //     // Open modal and reset progress
+    //     setBulkAudioModal({
+    //         isOpen: true,
+    //         progress: { english: false, marathi: false, hindi: false, gujarati: false }
+    //     });
 
-        const languages = [
-            { key: 'english', text: translations.en, label: 'English' },
-            { key: 'marathi', text: translations.mr, label: 'Marathi' },
-            { key: 'hindi', text: translations.hi, label: 'Hindi' },
-            { key: 'gujarati', text: translations.gu, label: 'Gujarati' }
-        ];
+    //     const languages = [
+    //         { key: 'english', text: translations.en, label: 'English' },
+    //         { key: 'marathi', text: translations.mr, label: 'Marathi' },
+    //         { key: 'hindi', text: translations.hi, label: 'Hindi' },
+    //         { key: 'gujarati', text: translations.gu, label: 'Gujarati' }
+    //     ];
 
-        try {
-            for (let i = 0; i < languages.length; i++) {
-                const { key, text, label } = languages[i];
-                
-                if (!text.trim()) {
-                    // Skip if no translation text
-                    setBulkAudioModal(prev => ({
-                        ...prev,
-                        progress: { ...prev.progress, [key]: true }
-                    }));
-                    continue;
-                }
+    //     try {
+    //         for (let i = 0; i < languages.length; i++) {
+    //             const { key, text, label } = languages[i];
+    //             
+    //             if (!text.trim()) {
+    //                 // Skip if no translation text
+    //                 setBulkAudioModal(prev => ({
+    //                     ...prev,
+    //                     progress: { ...prev.progress, [key]: true }
+    //                 }));
+    //                 continue;
+    //             }
 
-                // Update progress for current language
-                setBulkAudioModal(prev => ({
-                    ...prev,
-                    progress: { ...prev.progress, [key]: true }
-                }));
+    //             // Update progress for current language
+    //             setBulkAudioModal(prev => ({
+    //                 ...prev,
+    //                 progress: { ...prev.progress, [key]: true }
+    //             }));
 
-                try {
-                    // Generate audio for current language
-                    const audioDataUrl = await generateTextToSpeech(text, key);
-                    
-                    // Set the audio URL for this language
-                    setAudioStates(prev => ({
-                        ...prev,
-                        [key]: { url: audioDataUrl, isGenerating: false }
-                    }));
+    //             try {
+    //                 // Generate audio for current language
+    //                 const audioDataUrl = await generateTextToSpeech(text, key);
+    //                 
+    //                 // Set the audio URL for this language
+    //                 setAudioStates(prev => ({
+    //                     ...prev,
+    //                     [key]: { url: audioDataUrl, isGenerating: false }
+    //                 }));
 
-                    // Add delay between API calls (2 seconds)
-                    if (i < languages.length - 1) {
-                        await new Promise(resolve => setTimeout(resolve, 2000));
-                    }
-                } catch (error) {
-                    console.error(`Failed to generate audio for ${label}:`, error);
-                    toast({
-                        variant: "destructive",
-                        title: "Generation Error",
-                        description: `Failed to generate audio for ${label}.`
-                    });
-                }
-            }
+    //                 // Add delay between API calls (2 seconds)
+    //                 if (i < languages.length - 1) {
+    //                     await new Promise(resolve => setTimeout(resolve, 2000));
+    //                 }
+    //             } catch (error) {
+    //                 console.error(`Failed to generate audio for ${label}:`, error);
+    //                 toast({
+    //                     variant: "destructive",
+    //                     title: "Generation Error",
+    //                     description: `Failed to generate audio for ${label}.`
+    //                 });
+    //             }
+    //         }
 
-            toast({
-                title: "Audio Generation Complete",
-                description: "All audio files have been generated successfully."
-            });
-        } catch (error) {
-            console.error("Bulk audio generation failed:", error);
-            toast({
-                variant: "destructive",
-                title: "Generation Error",
-                description: "Failed to generate some audio files."
-            });
-        } finally {
-            // Close modal
-            setBulkAudioModal({ isOpen: false, progress: { english: false, marathi: false, hindi: false, gujarati: false } });
-        }
-    };
+    //         toast({
+    //             title: "Audio Generation Complete",
+    //             description: "All audio files have been generated successfully."
+    //         });
+    //     } catch (error) {
+    //         console.error("Bulk audio generation failed:", error);
+    //         toast({
+    //             variant: "destructive",
+    //             title: "Generation Error",
+    //             description: "Failed to generate some audio files."
+    //         });
+    //     } finally {
+    //         // Close modal
+    //         // setBulkAudioModal({ isOpen: false, progress: { english: false, marathi: false, hindi: false, gujarati: false } }); // Commented out for future use
+    //     }
+    // };
 
 
     // Auto-translate when input text changes (with debounce)
@@ -490,8 +539,8 @@ export default function TextToIslPage() {
                     console.error('Error clearing audio files:', error);
                 }
                 
-                // Clear saved audio files state
-                setSavedAudioFiles({});
+                // Clear saved audio files state (commented out for future use)
+                // setSavedAudioFiles({});
                 
                 toast({
                     title: "No ISL Videos Found",
@@ -529,8 +578,9 @@ export default function TextToIslPage() {
         setInputText('');
         setIslPlaylist([]);
         setTranslations({ en: '', mr: '', hi: '', gu: '' });
-        setAudioStates({});
-        setSavedAudioFiles({});
+        // Audio state clearing commented out for future use:
+        // setAudioStates({});
+        // setSavedAudioFiles({});
     }
 
     const handleClearAll = async () => {
@@ -554,12 +604,14 @@ export default function TextToIslPage() {
         setInputText('');
         setIslPlaylist([]);
         setTranslations({ en: '', mr: '', hi: '', gu: '' });
-        setAudioStates({});
-        setSavedAudioFiles({});
-        setIslVideoPath('');
+        // Audio state clearing commented out for future use:
+        // setAudioStates({});
+        // setSavedAudioFiles({});
+        // Audio and publishing state clearing commented out for future use:
+        setIslVideoPath(''); // Keep for video generation
         setIsGeneratingVideo(false);
-        setIsPublishing(false);
-        setBulkAudioModal({ isOpen: false, progress: { english: false, marathi: false, hindi: false, gujarati: false } });
+        setIsPublishing(false); // Keep for UI state management
+        // setBulkAudioModal({ isOpen: false, progress: { english: false, marathi: false, hindi: false, gujarati: false } }); // Commented out for future use
         
         toast({
             title: "All Data Cleared",
@@ -713,6 +765,7 @@ export default function TextToIslPage() {
                             <CardDescription>
                                 Automatic translations of your text
                             </CardDescription>
+                            {/* Audio generation and saving buttons commented out for future use:
                             <div className="mt-2 flex gap-2">
                                 <Button 
                                     size="sm" 
@@ -731,6 +784,7 @@ export default function TextToIslPage() {
                                     Save Audio
                                 </Button>
                             </div>
+                            */}
                         </CardHeader>
                         <CardContent className="flex-grow flex gap-4">
                             {/* Left Panel - Translations */}
@@ -748,6 +802,7 @@ export default function TextToIslPage() {
                                                 ) : addSpacesToDigits(translations.en) || 'Translation will appear here'}
                                             </span>
                                         </div>
+                                        {/* Audio player commented out for future use:
                                         {audioStates.english?.url && (
                                             <div className="mt-2 flex gap-2 items-center">
                                                 <audio controls className="flex-1">
@@ -756,6 +811,7 @@ export default function TextToIslPage() {
                                                 </audio>
                                             </div>
                                         )}
+                                        */}
                                     </div>
                                     
                                     <div>
@@ -770,6 +826,7 @@ export default function TextToIslPage() {
                                                 ) : addSpacesToDigits(translations.mr) || 'Translation will appear here'}
                                             </span>
                                         </div>
+                                        {/* Audio player commented out for future use:
                                         {audioStates.marathi?.url && (
                                             <div className="mt-2 flex gap-2 items-center">
                                                 <audio controls className="flex-1">
@@ -778,6 +835,7 @@ export default function TextToIslPage() {
                                                 </audio>
                                             </div>
                                         )}
+                                        */}
                                     </div>
                                     
                                     <div>
@@ -792,6 +850,7 @@ export default function TextToIslPage() {
                                                 ) : addSpacesToDigits(translations.hi) || 'Translation will appear here'}
                                             </span>
                                         </div>
+                                        {/* Audio player commented out for future use:
                                         {audioStates.hindi?.url && (
                                             <div className="mt-2 flex gap-2 items-center">
                                                 <audio controls className="flex-1">
@@ -800,6 +859,7 @@ export default function TextToIslPage() {
                                                 </audio>
                                             </div>
                                         )}
+                                        */}
                                     </div>
                                     
                                     <div>
@@ -814,6 +874,7 @@ export default function TextToIslPage() {
                                                 ) : addSpacesToDigits(translations.gu) || 'Translation will appear here'}
                                             </span>
                                         </div>
+                                        {/* Audio player commented out for future use:
                                         {audioStates.gujarati?.url && (
                                             <div className="mt-2 flex gap-2 items-center">
                                                 <audio controls className="flex-1">
@@ -822,6 +883,7 @@ export default function TextToIslPage() {
                                                 </audio>
                                             </div>
                                         )}
+                                        */}
                                     </div>
                                 </div>
                             </div>
@@ -836,7 +898,8 @@ export default function TextToIslPage() {
                                     ) : (
                                         <IslVideoPlayer 
                                             playlist={islPlaylist} 
-                                            title="ISL Video Output" 
+                                            title="ISL Video Output"
+                                            onPublish={handlePublish}
                                         />
                                     )}
                                 </div>
@@ -866,7 +929,7 @@ export default function TextToIslPage() {
             {/* TTS Modal */}
             {/* The TTS modal is removed as per the edit hint. */}
 
-            {/* Bulk Audio Generation Progress Modal */}
+            {/* Bulk Audio Generation Progress Modal - commented out for future use:
             {bulkAudioModal.isOpen && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                     <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
@@ -932,6 +995,7 @@ export default function TextToIslPage() {
                     </div>
                 </div>
             )}
+            */}
         </div>
     );
 }

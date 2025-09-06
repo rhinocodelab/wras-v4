@@ -42,18 +42,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Read the audio file
+    // Read the audio file - try different extensions
     const tempDir = join(process.cwd(), 'public', 'temp-audio');
-    const filePath = join(tempDir, `${audioId}.webm`);
-    
-    console.log('Reading audio file from:', filePath);
-    
+    const possibleExtensions = ['webm', 'wav', 'mp3'];
+    let filePath: string;
     let audioBuffer: Buffer;
-    try {
-      audioBuffer = await readFile(filePath);
-      console.log('Audio file read successfully, size:', audioBuffer.length, 'bytes');
-    } catch (error) {
-      console.log('Error reading audio file:', error);
+    let fileExtension: string;
+    
+    // Try to find the file with different extensions
+    for (const ext of possibleExtensions) {
+      const testPath = join(tempDir, `${audioId}.${ext}`);
+      try {
+        audioBuffer = await readFile(testPath);
+        filePath = testPath;
+        fileExtension = ext;
+        console.log(`Audio file found: ${testPath}, size: ${audioBuffer.length} bytes`);
+        break;
+      } catch (error) {
+        // Continue to next extension
+        continue;
+      }
+    }
+    
+    if (!audioBuffer) {
+      console.log('Error: Audio file not found with any supported extension');
       return NextResponse.json(
         { success: false, error: 'Audio file not found' },
         { status: 404 }
@@ -61,14 +73,40 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-      // Configure Google Cloud Speech-to-Text with enhanced settings (from Speech to ISL)
+      // Determine encoding and sample rate based on file extension
+      let encoding: string;
+      let sampleRateHertz: number;
+      
+      if (fileExtension === 'wav') {
+        // For WAV files, try to detect properties from header
+        if (audioBuffer.length >= 44) {
+          const sampleRate = audioBuffer.readUInt32LE(24);
+          const bitsPerSample = audioBuffer.readUInt16LE(34);
+          sampleRateHertz = sampleRate;
+          encoding = bitsPerSample === 16 ? 'LINEAR16' : 'LINEAR8';
+        } else {
+          sampleRateHertz = 16000;
+          encoding = 'LINEAR16';
+        }
+      } else if (fileExtension === 'mp3') {
+        encoding = 'MP3';
+        sampleRateHertz = 44100; // Common MP3 sample rate
+      } else {
+        // Default for webm
+        encoding = 'WEBM_OPUS';
+        sampleRateHertz = 48000;
+      }
+      
+      console.log(`Using audio config: encoding=${encoding}, sampleRateHertz=${sampleRateHertz}, fileExtension=${fileExtension}`);
+      
+      // Configure Google Cloud Speech-to-Text with enhanced settings
       const speechRequest = {
         audio: {
           content: audioBuffer,
         },
         config: {
-          encoding: 'WEBM_OPUS' as const,
-          sampleRateHertz: 48000,
+          encoding: encoding as any,
+          sampleRateHertz: sampleRateHertz,
           languageCode: languageCode,
           alternativeLanguageCodes: SUPPORTED_LANGUAGES.filter(lang => lang !== languageCode),
           enableAutomaticPunctuation: true,
@@ -147,7 +185,7 @@ export async function POST(request: NextRequest) {
       // Clean up the temporary audio file
       try {
         await unlink(filePath);
-        console.log(`Cleaned up temporary audio file: ${audioId}.webm`);
+        console.log(`Cleaned up temporary audio file: ${audioId}.${fileExtension}`);
       } catch (error) {
         console.log(`Failed to clean up audio file: ${error}`);
       }
@@ -167,7 +205,7 @@ export async function POST(request: NextRequest) {
       // Clean up the temporary audio file even on error
       try {
         await unlink(filePath);
-        console.log(`Cleaned up temporary audio file after error: ${audioId}.webm`);
+        console.log(`Cleaned up temporary audio file after error: ${audioId}.${fileExtension}`);
       } catch (cleanupError) {
         console.log(`Failed to clean up audio file after error: ${cleanupError}`);
       }

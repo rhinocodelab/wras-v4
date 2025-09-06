@@ -871,8 +871,8 @@ async function normalizeVideoForStitching(videoPath: string, outputPath: string,
         const absoluteInputPath = path.join(process.cwd(), 'public', videoPath);
         const absoluteOutputPath = path.join(process.cwd(), 'public', outputPath);
         
-        // Normalize video to standard format for stitching
-        const ffmpegCommand = `ffmpeg -i "${absoluteInputPath}" -vf "fps=${targetFrameRate},scale=${targetResolution}:force_original_aspect_ratio=decrease,pad=${targetResolution}:(ow-iw)/2:(oh-ih)/2" -c:v libx264 -preset fast -crf 23 -c:a aac -b:a 128k -movflags +faststart -pix_fmt yuv420p "${absoluteOutputPath}" -y`;
+        // Normalize video to standard format for stitching (remove audio for ISL videos)
+        const ffmpegCommand = `ffmpeg -i "${absoluteInputPath}" -vf "fps=${targetFrameRate},scale=${targetResolution}:force_original_aspect_ratio=decrease,pad=${targetResolution}:(ow-iw)/2:(oh-ih)/2" -c:v libx264 -preset fast -crf 23 -an -movflags +faststart -pix_fmt yuv420p "${absoluteOutputPath}" -y`;
         
         console.log(`Normalizing video ${videoPath} to ${targetResolution} @ ${targetFrameRate}fps`);
         console.log('FFmpeg command:', ffmpegCommand);
@@ -917,9 +917,9 @@ async function preprocessVideoForStitching(videoPath: string): Promise<string | 
         
         // Pre-process video to ensure compatibility:
         // - Force frame rate to 30fps
-        // - Ensure consistent resolution
-        // - Remove any problematic audio
-        // - Use consistent codec settings
+        // - Ensure consistent resolution (1280x720)
+        // - Remove all audio tracks (-an flag)
+        // - Use consistent codec settings (H.264)
         const ffmpegCommand = `ffmpeg -i "${absoluteInputPath}" -vf "fps=30:round=up,scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2" -c:v libx264 -preset fast -crf 23 -an -movflags +faststart -pix_fmt yuv420p "${outputPath}" -y`;
         
         console.log('Pre-processing command:', ffmpegCommand);
@@ -956,11 +956,13 @@ async function preprocessVideoForStitching(videoPath: string): Promise<string | 
 async function createFinalIslAnnouncementVideo(
     videoPaths: string[], 
     outputFileName: string,
-    targetDuration: number = 30
+    targetDuration: number = 30,
+    playbackSpeed: number = 1.33  // Default 1.33x speed (0.75 PTS)
 ): Promise<string | null> {
     try {
         console.log('Creating final ISL announcement video (video only)...');
         console.log('Video paths:', videoPaths);
+        console.log(`Playback speed: ${playbackSpeed}x (PTS multiplier: ${1/playbackSpeed})`);
         
         // Check and fix problematic videos (especially vapi.mp4)
         console.log('Checking and fixing problematic videos...');
@@ -1011,8 +1013,9 @@ async function createFinalIslAnnouncementVideo(
 
         // Create a video-only file with optimized settings for smooth playback
         // No audio merging - just clean video that won't get stuck
-        // Use a simpler, more reliable approach for the final video
-        let ffmpegCommand = `ffmpeg -f concat -safe 0 -i "${tempListPath}" -c:v copy -an -movflags +faststart "${outputPath}" -y`;
+        // Use a simpler, more reliable approach for the final video with speed control
+        const speedMultiplier = 1 / playbackSpeed;  // Convert speed to PTS multiplier
+        let ffmpegCommand = `ffmpeg -f concat -safe 0 -i "${tempListPath}" -filter:v "setpts=${speedMultiplier}*PTS" -c:v libx264 -preset fast -crf 23 -an -movflags +faststart -pix_fmt yuv420p "${outputPath}" -y`;
         
         console.log('Executing FFmpeg command for video-only announcement:', ffmpegCommand);
         
@@ -1041,8 +1044,8 @@ async function createFinalIslAnnouncementVideo(
         if (!success) {
             console.log('Using fallback method with re-encoding for better compatibility...');
             
-            // Fallback: Create a more robust final video with re-encoding
-            ffmpegCommand = `ffmpeg -f concat -safe 0 -i "${tempListPath}" -filter_complex "[0:v]fps=30,scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2" -c:v libx264 -preset fast -crf 23 -an -movflags +faststart -pix_fmt yuv420p -t ${targetDuration} "${outputPath}" -y`;
+            // Fallback: Create a more robust final video with re-encoding and speed control
+            ffmpegCommand = `ffmpeg -f concat -safe 0 -i "${tempListPath}" -filter_complex "[0:v]fps=30,scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,setpts=${speedMultiplier}*PTS" -c:v libx264 -preset fast -crf 23 -an -movflags +faststart -pix_fmt yuv420p -t ${targetDuration} "${outputPath}" -y`;
             
             console.log('Fallback FFmpeg command:', ffmpegCommand);
             

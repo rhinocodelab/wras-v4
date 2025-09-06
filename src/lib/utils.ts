@@ -9,11 +9,14 @@ export function generateTextToIslHtml(
     originalText: string,
     translations: { en: string; mr: string; hi: string; gu: string },
     islVideoPath: string,
-    audioFiles: { en?: string; mr?: string; hi?: string; gu: string }
+    audioFiles: { en?: string; mr?: string; hi?: string; gu: string },
+    playbackSpeed: number = 1.0
 ): string {
     // Create language-specific data for synchronization
+    // If no audio files provided, show all translations without audio
+    const hasAudioFiles = Object.values(audioFiles).some(path => path);
     const announcementData = Object.entries(translations)
-        .filter(([lang, text]) => text && audioFiles[lang as keyof typeof audioFiles])
+        .filter(([lang, text]) => text && (hasAudioFiles ? audioFiles[lang as keyof typeof audioFiles] : true))
         .map(([lang, text]) => ({
             language_code: lang,
             text: text,
@@ -59,6 +62,7 @@ export function generateTextToIslHtml(
             justify-content: center; 
             align-items: center; 
             padding: 20px; 
+            padding-bottom: 120px; /* Add space for ticker */
         }
         .video-container { 
             width: 80%; 
@@ -76,13 +80,14 @@ export function generateTextToIslHtml(
         .ticker-wrap { 
             position: fixed; 
             bottom: 0; 
-            left: 50%; 
-            transform: translateX(-50%); 
-            width: 1200px; 
+            left: 0; 
+            right: 0; 
+            width: 100%; 
             background-color: #1a1a1a; 
             padding: 20px; 
             overflow: hidden; 
             min-height: 80px; 
+            border-top: 2px solid #333;
         }
         .ticker { 
             display: block; 
@@ -150,6 +155,7 @@ export function generateTextToIslHtml(
         let currentAudioIndex = 0;
         let isPlaying = false;
         let videoRetryCount = 0;
+        let currentSpeed = ${playbackSpeed};
         const maxRetries = 3;
         
         // Enhanced error handling for video
@@ -177,6 +183,14 @@ export function generateTextToIslHtml(
             loadingElement.style.display = 'none';
         }
         
+        function changeSpeed(speed) {
+            currentSpeed = speed;
+            if (videoElement) {
+                videoElement.playbackRate = speed;
+            }
+            console.log('Playback speed changed to:', speed + 'x');
+        }
+        
         // Robust video loading and playback
         function loadAndPlayVideo() {
             if (videoSources.length === 0) {
@@ -200,6 +214,7 @@ export function generateTextToIslHtml(
             
             videoElement.oncanplay = () => {
                 console.log('Video can start playing');
+                videoElement.playbackRate = currentSpeed;
                 videoElement.play().catch(error => {
                     console.error('Error playing video:', error);
                     handleVideoError();
@@ -247,6 +262,36 @@ export function generateTextToIslHtml(
             tickerElement.classList.remove('active');
         }
         
+        // Function to cycle through translations when no audio files are available
+        function startTickerRotation() {
+            if (announcementData.length === 0) return;
+            
+            let currentIndex = 0;
+            
+            function showNextTranslation() {
+                if (announcementData.length === 0) return;
+                
+                const announcement = announcementData[currentIndex];
+                updateTickerText(announcement.language_code);
+                
+                currentIndex = (currentIndex + 1) % announcementData.length;
+                
+                // Show each translation for 3 seconds
+                setTimeout(() => {
+                    if (isPlaying) {
+                        fadeTickerText();
+                        setTimeout(() => {
+                            if (isPlaying) {
+                                showNextTranslation();
+                            }
+                        }, 500);
+                    }
+                }, 3000);
+            }
+            
+            showNextTranslation();
+        }
+        
         // Separate audio playback function - independent of video
         function startAudioPlayback() {
             if (currentAudioIndex < audioSources.length) {
@@ -290,10 +335,13 @@ export function generateTextToIslHtml(
                 updateTickerText(announcementData[0].language_code);
             }
             
-            // Start audio playback after a short delay to ensure video is loaded
+            // Start audio playback after a short delay to ensure video is loaded (only if audio files exist)
             setTimeout(() => {
                 if (audioSources.length > 0) {
                     startAudioPlayback();
+                } else if (announcementData.length > 0) {
+                    // If no audio files, cycle through translations in ticker
+                    startTickerRotation();
                 }
             }, 2000);
         }, { once: true });
@@ -311,6 +359,16 @@ export function generateTextToIslHtml(
                     audioPlayer.play().catch(console.error);
                 }
             }
+        });
+        
+        // Add keyboard shortcuts for speed control
+        document.addEventListener('keydown', (e) => {
+            if (e.key === '1') changeSpeed(0.5);
+            else if (e.key === '2') changeSpeed(0.75);
+            else if (e.key === '3') changeSpeed(1.0);
+            else if (e.key === '4') changeSpeed(1.25);
+            else if (e.key === '5') changeSpeed(1.5);
+            else if (e.key === '6') changeSpeed(2.0);
         });
     </script>
 </body>
