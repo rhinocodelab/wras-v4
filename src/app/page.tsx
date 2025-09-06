@@ -183,13 +183,13 @@ export default function HomePage() {
                   <FolderKanban className="h-4 w-4" />
                   ISL Dataset
                 </div>
-                <div
+                {/* <div
                   onClick={() => setActiveView('speech-to-isl')}
                   className={getLinkClassName('speech-to-isl')}
                 >
                   <Speech className="h-4 w-4" />
                   Speech to ISL
-                </div>
+                </div> */}
                 <div
                   onClick={() => setActiveView('text-to-isl')}
                   className={getLinkClassName('text-to-isl')}
@@ -208,8 +208,8 @@ export default function HomePage() {
                   onClick={() => setActiveView('auto-speech-detection')}
                   className={getLinkClassName('auto-speech-detection')}
                 >
-                  <Globe className="h-4 w-4" />
-                  Auto Speech Detection
+                  <Speech className="h-4 w-4" />
+                  Speech to ISL
                 </div>
               </div>
             </div>
@@ -309,13 +309,13 @@ export default function HomePage() {
                       <FolderKanban className="h-5 w-5" />
                       ISL Dataset
                     </div>
-                    <div
+                    {/* <div
                       onClick={() => setActiveView('speech-to-isl')}
                       className={getMobileLinkClassName('speech-to-isl')}
                     >
                       <Speech className="h-5 w-5" />
                       Speech to ISL
-                    </div>
+                    </div> */}
                     <div
                       onClick={() => setActiveView('text-to-isl')}
                       className={getMobileLinkClassName('text-to-isl')}
@@ -334,8 +334,8 @@ export default function HomePage() {
                       onClick={() => setActiveView('auto-speech-detection')}
                       className={getMobileLinkClassName('auto-speech-detection')}
                     >
-                      <Globe className="h-5 w-5" />
-                      Auto Speech Detection
+                      <Speech className="h-5 w-5" />
+                      Speech to ISL
                     </div>
                   </div>
                 </nav>

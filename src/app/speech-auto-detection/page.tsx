@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
-import { Mic, MicOff, Loader2, Languages, MessageSquare, X, Globe, Video, Film, Rocket } from 'lucide-react';
+import { Mic, MicOff, Loader2, Languages, MessageSquare, X, Globe, Video, Film, Rocket, Speech } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { getIslVideoPlaylist } from '@/app/actions';
 
@@ -500,8 +500,8 @@ export default function AutoSpeechDetectionPage() {
     <div className="w-full h-full flex flex-col">
       <div>
         <h1 className="text-lg font-semibold md:text-2xl flex items-center gap-2">
-          <Globe className="h-6 w-6 text-primary" />
-          Auto Speech Detection
+          <Speech className="h-6 w-6 text-primary" />
+          Speech to ISL
         </h1>
         <p className="text-muted-foreground">
           Speak in any supported language and we'll automatically detect and transcribe it.
