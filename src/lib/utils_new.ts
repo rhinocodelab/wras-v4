@@ -1,10 +1,4 @@
-import { type ClassValue, clsx } from "clsx"
-import { twMerge } from "tailwind-merge"
 import { translateTextToMultipleLanguages } from '../app/actions';
-
-export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs))
-}
 
 export function generateTextToIslHtml(
     originalText: string,
@@ -31,11 +25,6 @@ export function generateTextToIslHtml(
     
     // Convert video path to absolute URL - ensure it points to isl_video
     const videoSources = JSON.stringify([islVideoPath]);
-    
-    // Generate audio elements HTML only if audio files exist
-    const audioElementsHtml = hasAudioFiles ? `
-    <audio id="announcement-audio"></audio>
-    <audio id="intro-audio" preload="auto"></audio>` : '';
 
     return `<!DOCTYPE html>
 <html lang="en">
@@ -70,29 +59,27 @@ export function generateTextToIslHtml(
     </div>
     <div class="ticker-wrap">
         <div id="ticker" class="ticker"></div>
-    </div>${audioElementsHtml}
+    </div>
+    <audio id="announcement-audio"></audio>
+    <audio id="intro-audio" preload="auto"></audio>
 
     <script>
         const videoElement = document.getElementById('isl-video');
+        const audioPlayer = document.getElementById('announcement-audio');
+        const introAudio = document.getElementById('intro-audio');
         const tickerElement = document.getElementById('ticker');
         const videoPlaylist = ${videoSources};
         const audioPlaylist = ${audioSources};
         const announcementData = ${announcementDataJson};
-        const hasAudioFiles = ${hasAudioFiles};
-        let currentSpeed = ${playbackSpeed};
-        
-        // Audio elements and variables (only if audio files exist)
-        ${hasAudioFiles ? `
-        const audioPlayer = document.getElementById('announcement-audio');
-        const introAudio = document.getElementById('intro-audio');
         const introAudioPath = 'http://localhost:3000/audio/intro_audio/intro.wav';
         let currentAudioIndex = 0;
         let isPlaying = false;
+        let currentSpeed = ${playbackSpeed};
         let isPlayingIntro = false;
 
         // Set up intro audio
         introAudio.src = introAudioPath;
-        introAudio.volume = 1.0;` : ''}
+        introAudio.volume = 1.0;
 
         function updateTickerText(languageCode) {
             const announcement = announcementData.find(a => a.language_code === languageCode);
@@ -131,7 +118,6 @@ export function generateTextToIslHtml(
             }
         }
 
-        ${hasAudioFiles ? `
         function playIntroThenAnnouncement() {
             if (!audioPlayer || audioPlaylist.length === 0) return;
             
@@ -155,40 +141,21 @@ export function generateTextToIslHtml(
             };
             
             introAudio.play().catch(e => console.error("Intro audio play error:", e));
-        }` : ''}
+        }
         
         function startPlayback() {
             if (videoPlaylist.length > 0) {
-                console.log('Loading video:', videoPlaylist[0]);
                 videoElement.src = videoPlaylist[0];
                 videoElement.loop = true;
                 videoElement.playbackRate = currentSpeed;
-                
-                // Add error handling for video loading
-                videoElement.onerror = (e) => {
-                    console.error('Video loading error:', e);
-                    console.error('Video src:', videoElement.src);
-                };
-                
-                videoElement.onloadstart = () => {
-                    console.log('Video loading started');
-                };
-                
-                videoElement.oncanplay = () => {
-                    console.log('Video can play, starting playback');
-                    videoElement.play().catch(e => console.error("Video play error:", e));
-                };
+                videoElement.play().catch(e => console.error("Video play error:", e));
                 
                 // Ensure video restarts when it ends (backup for loop)
                 videoElement.addEventListener('ended', () => {
                     videoElement.currentTime = 0;
                     videoElement.play().catch(e => console.error("Video restart error:", e));
                 });
-            } else {
-                console.error('No video sources available');
             }
-            
-            ${hasAudioFiles ? `
             if (audioPlaylist.length > 0) {
                 isPlaying = true;
                 
@@ -198,14 +165,9 @@ export function generateTextToIslHtml(
                 }
                 
                 playIntroThenAnnouncement();
-            }` : `
-            // No audio files - just show first translation in ticker
-            if (announcementData.length > 0) {
-                updateTickerText(announcementData[0].language_code);
-            }`}
+            }
         }
 
-        ${hasAudioFiles ? `
         // Handle announcement audio ending
         audioPlayer.addEventListener('ended', () => {
             if (isPlaying && currentAudioIndex < audioPlaylist.length) {
@@ -220,7 +182,7 @@ export function generateTextToIslHtml(
                     }
                 }, 1000); // 1 second pause before restarting
             }
-        });` : ''}
+        });
         
         // Use a more reliable event to start playback
         window.addEventListener('load', startPlayback, { once: true });

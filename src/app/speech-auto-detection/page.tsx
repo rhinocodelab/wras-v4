@@ -7,6 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Mic, MicOff, Loader2, Languages, MessageSquare, X, Globe, Video, Film, Rocket, Speech } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { getIslVideoPlaylist } from '@/app/actions';
+import { generateTextToIslHtml } from '@/lib/utils';
 
 const SUPPORTED_LANGUAGES = [
   { code: 'en-IN', name: 'English (India)' },
@@ -417,118 +418,23 @@ export default function AutoSpeechDetectionPage() {
     const englishText = translations['en-IN'];
     if (!englishText && !transcribedText) return;
 
-    const tickerText = [transcribedText, englishText].filter(Boolean).join(' &nbsp; | &nbsp; ');
-    
-    // Convert relative video paths to absolute URLs
+    // Convert relative video path to absolute URL
     const baseUrl = window.location.origin;
-    const absoluteVideoPaths = islPlaylist.map(path => `${baseUrl}${path}`);
-    const videoSources = JSON.stringify(absoluteVideoPaths);
+    const absoluteVideoPath = `${baseUrl}${islPlaylist[0]}`;
 
-    const htmlContent = `
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>ISL Announcement</title>
-        <style>
-            body {
-                margin: 0;
-                padding: 0;
-                font-family: Arial, sans-serif;
-                background: #000;
-                color: #fff;
-                overflow: hidden;
-            }
-            .container {
-                position: relative;
-                width: 100vw;
-                height: 100vh;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-            }
-            .ticker {
-                position: absolute;
-                bottom: 20px;
-                left: 0;
-                right: 0;
-                background: rgba(0, 0, 0, 0.8);
-                padding: 10px 0;
-                white-space: nowrap;
-                overflow: hidden;
-                font-size: 24px;
-                font-weight: bold;
-            }
-            .ticker-content {
-                display: inline-block;
-                animation: scroll 30s linear infinite;
-            }
-            @keyframes scroll {
-                0% { transform: translateX(100%); }
-                100% { transform: translateX(-100%); }
-            }
-            video {
-                width: 100%;
-                height: 100%;
-                object-fit: cover;
-            }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <video id="videoPlayer" autoplay muted loop>
-                <source src="${islPlaylist[0]}" type="video/mp4">
-            </video>
-            <div class="ticker">
-                <div class="ticker-content">${tickerText}</div>
-            </div>
-        </div>
-        <script>
-            const videoSources = ${videoSources};
-            let currentVideoIndex = 0;
-            let currentSpeed = ${selectedPlaybackSpeed};
-            const videoElement = document.getElementById('videoPlayer');
-            
-            function playNextVideo() {
-                if (videoSources.length > 1) {
-                    currentVideoIndex = (currentVideoIndex + 1) % videoSources.length;
-                    videoElement.src = videoSources[currentVideoIndex];
-                }
-            }
-            
-            function changeSpeed(speed) {
-                currentSpeed = speed;
-                videoElement.playbackRate = speed;
-                console.log('Playback speed changed to:', speed + 'x');
-            }
-            
-            videoElement.addEventListener('ended', playNextVideo);
-            
-            function startPlayback() {
-                if (videoSources.length > 0) {
-                    videoElement.src = videoSources[0];
-                    videoElement.loop = true;
-                    videoElement.playbackRate = currentSpeed;
-                    videoElement.play().catch(e => console.error("Video play error:", e));
-                }
-            }
-            
-            // Add keyboard shortcuts for speed control
-            document.addEventListener('keydown', (e) => {
-                if (e.key === '1') changeSpeed(0.5);
-                else if (e.key === '2') changeSpeed(0.75);
-                else if (e.key === '3') changeSpeed(1.0);
-                else if (e.key === '4') changeSpeed(1.25);
-                else if (e.key === '5') changeSpeed(1.5);
-                else if (e.key === '6') changeSpeed(2.0);
-            });
-            
-            window.addEventListener('load', startPlayback, { once: true });
-        </script>
-    </body>
-    </html>
-    `;
+    // Use the proper generateTextToIslHtml function
+    const htmlContent = generateTextToIslHtml(
+      transcribedText || englishText, // original text
+      {
+        en: englishText || transcribedText,
+        hi: translations['hi-IN'] || '',
+        mr: translations['mr-IN'] || '',
+        gu: translations['gu-IN'] || ''
+      },
+      absoluteVideoPath, // absolute video path
+      {}, // no audio files for Speech to ISL
+      selectedPlaybackSpeed
+    );
 
     const blob = new Blob([htmlContent], { type: 'text/html' });
     const url = URL.createObjectURL(blob);

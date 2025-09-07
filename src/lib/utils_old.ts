@@ -1,6 +1,5 @@
 import { type ClassValue, clsx } from "clsx"
 import { twMerge } from "tailwind-merge"
-import { translateTextToMultipleLanguages } from '../app/actions';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -32,10 +31,12 @@ export function generateTextToIslHtml(
     // Convert video path to absolute URL - ensure it points to isl_video
     const videoSources = JSON.stringify([islVideoPath]);
     
-    // Generate audio elements HTML only if audio files exist
-    const audioElementsHtml = hasAudioFiles ? `
-    <audio id="announcement-audio"></audio>
-    <audio id="intro-audio" preload="auto"></audio>` : '';
+    // Use dynamic origin detection in JavaScript
+    const originScript = `
+        const origin = window.location.origin || 'http://localhost:3000';
+        const videoSources = ${videoSources}.map(path => origin + path);
+        const audioSources = ${audioSources}.map(path => origin + path);
+    `;
 
     return `<!DOCTYPE html>
 <html lang="en">
@@ -70,30 +71,61 @@ export function generateTextToIslHtml(
     </div>
     <div class="ticker-wrap">
         <div id="ticker" class="ticker"></div>
-    </div>${audioElementsHtml}
+    </div>
+    <audio id="announcement-audio" preload="auto"></audio>
+    <audio id="intro-audio" preload="auto"></audio>
 
     <script>
         const videoElement = document.getElementById('isl-video');
+        const audioPlayer = document.getElementById('announcement-audio');
+        const introAudio = document.getElementById('intro-audio');
         const tickerElement = document.getElementById('ticker');
         const videoPlaylist = ${videoSources};
         const audioPlaylist = ${audioSources};
         const announcementData = ${announcementDataJson};
-        const hasAudioFiles = ${hasAudioFiles};
-        let currentSpeed = ${playbackSpeed};
-        
-        // Audio elements and variables (only if audio files exist)
-        ${hasAudioFiles ? `
-        const audioPlayer = document.getElementById('announcement-audio');
-        const introAudio = document.getElementById('intro-audio');
         const introAudioPath = 'http://localhost:3000/audio/intro_audio/intro.wav';
         let currentAudioIndex = 0;
         let isPlaying = false;
+        let currentSpeed = ${playbackSpeed};
         let isPlayingIntro = false;
 
         // Set up intro audio
         introAudio.src = introAudioPath;
-        introAudio.volume = 1.0;` : ''}
-
+        introAudio.volume = 1.0;
+        
+        function changeSpeed(speed) {
+            currentSpeed = speed;
+            if (videoElement) {
+                videoElement.playbackRate = speed;
+            }
+            console.log('Playback speed changed to:', speed + 'x');
+        }
+        
+        function startPlayback() {
+            if (videoPlaylist.length > 0) {
+                videoElement.src = videoPlaylist[0];
+                videoElement.loop = true;
+                videoElement.playbackRate = currentSpeed;
+                videoElement.play().catch(e => console.error("Video play error:", e));
+                
+                // Ensure video restarts when it ends (backup for loop)
+                videoElement.addEventListener('ended', () => {
+                    videoElement.currentTime = 0;
+                    videoElement.play().catch(e => console.error("Video restart error:", e));
+                });
+            }
+            if (audioPlaylist.length > 0) {
+                isPlaying = true;
+                
+                // Initialize ticker with first language text
+                if (announcementData.length > 0) {
+                    updateTickerText(announcementData[0].language_code);
+                }
+                
+                playIntroThenAnnouncement();
+            }
+        }
+        
         function updateTickerText(languageCode) {
             const announcement = announcementData.find(a => a.language_code === languageCode);
             if (announcement && tickerElement) {
@@ -116,14 +148,6 @@ export function generateTextToIslHtml(
             }
         }
         
-        function changeSpeed(speed) {
-            currentSpeed = speed;
-            if (videoElement) {
-                videoElement.playbackRate = speed;
-            }
-            console.log('Playback speed changed to:', speed + 'x');
-        }
-
         function fadeTickerText() {
             if (tickerElement) {
                 tickerElement.classList.add('fade');
@@ -131,7 +155,6 @@ export function generateTextToIslHtml(
             }
         }
 
-        ${hasAudioFiles ? `
         function playIntroThenAnnouncement() {
             if (!audioPlayer || audioPlaylist.length === 0) return;
             
@@ -155,75 +178,106 @@ export function generateTextToIslHtml(
             };
             
             introAudio.play().catch(e => console.error("Intro audio play error:", e));
-        }` : ''}
+        }
         
-        function startPlayback() {
-            if (videoPlaylist.length > 0) {
-                console.log('Loading video:', videoPlaylist[0]);
-                videoElement.src = videoPlaylist[0];
-                videoElement.loop = true;
-                videoElement.playbackRate = currentSpeed;
+        // Function to cycle through translations when no audio files are available
+        function startTickerRotation() {
+            if (announcementData.length === 0) return;
+            
+            let currentIndex = 0;
+            
+            function showNextTranslation() {
+                if (announcementData.length === 0) return;
                 
-                // Add error handling for video loading
-                videoElement.onerror = (e) => {
-                    console.error('Video loading error:', e);
-                    console.error('Video src:', videoElement.src);
-                };
+                const announcement = announcementData[currentIndex];
+                updateTickerText(announcement.language_code);
                 
-                videoElement.onloadstart = () => {
-                    console.log('Video loading started');
-                };
+                currentIndex = (currentIndex + 1) % announcementData.length;
                 
-                videoElement.oncanplay = () => {
-                    console.log('Video can play, starting playback');
-                    videoElement.play().catch(e => console.error("Video play error:", e));
-                };
-                
-                // Ensure video restarts when it ends (backup for loop)
-                videoElement.addEventListener('ended', () => {
-                    videoElement.currentTime = 0;
-                    videoElement.play().catch(e => console.error("Video restart error:", e));
-                });
-            } else {
-                console.error('No video sources available');
+                // Show each translation for 3 seconds
+                setTimeout(() => {
+                    if (isPlaying) {
+                        fadeTickerText();
+                        setTimeout(() => {
+                            if (isPlaying) {
+                                showNextTranslation();
+                            }
+                        }, 500);
+                    }
+                }, 3000);
             }
             
-            ${hasAudioFiles ? `
-            if (audioPlaylist.length > 0) {
-                isPlaying = true;
-                
-                // Initialize ticker with first language text
-                if (announcementData.length > 0) {
-                    updateTickerText(announcementData[0].language_code);
-                }
-                
-                playIntroThenAnnouncement();
-            }` : `
-            // No audio files - just show first translation in ticker
-            if (announcementData.length > 0) {
-                updateTickerText(announcementData[0].language_code);
-            }`}
+            showNextTranslation();
         }
-
-        ${hasAudioFiles ? `
+        
+        // Separate audio playback function - independent of video
+        function startAudioPlayback() {
+            if (currentAudioIndex < audioSources.length) {
+                const audioPath = audioSources[currentAudioIndex];
+                audioPlayer.src = audioPath;
+                audioPlayer.load();
+                
+                audioPlayer.oncanplay = () => {
+                    audioPlayer.play().catch(console.error);
+                    const languageCode = announcementData[currentAudioIndex]?.language_code;
+                    if (languageCode) {
+                        updateTickerText(languageCode);
+                    }
+                };
+                
+                currentAudioIndex++;
+            }
+        }
+        
         // Handle announcement audio ending
         audioPlayer.addEventListener('ended', () => {
-            if (isPlaying && currentAudioIndex < audioPlaylist.length) {
-                // Continue to next announcement
-                playIntroThenAnnouncement();
+            if (isPlaying && currentAudioIndex < audioSources.length) {
+                startAudioPlayback();
             } else if (isPlaying) {
-                // All announcements finished, restart the cycle
                 currentAudioIndex = 0;
                 setTimeout(() => {
                     if (isPlaying) {
-                        playIntroThenAnnouncement();
+                        startAudioPlayback();
                     }
-                }, 1000); // 1 second pause before restarting
+                }, 1000);
             }
-        });` : ''}
+        });
         
-        // Use a more reliable event to start playback
-        window.addEventListener('load', startPlayback, { once: true });
+        // Initialize when page loads
+        window.addEventListener('load', () => {
+            console.log('Page loaded, starting ISL announcement');
+            startPlayback();
+            
+            // Initialize ticker with first language
+            if (announcementData.length > 0) {
+                updateTickerText(announcementData[0].language_code);
+            }
+            
+            // Start audio playback after a short delay to ensure video is loaded (only if audio files exist)
+            setTimeout(() => {
+                if (audioSources.length > 0) {
+                    startAudioPlayback();
+                } else if (announcementData.length > 0) {
+                    // If no audio files, cycle through translations in ticker
+                    startTickerRotation();
+                }
+            }, 2000);
+        }, { once: true });
+        
+        // Handle page visibility changes
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                console.log('Page hidden, pausing playback');
+                videoElement.pause();
+                audioPlayer.pause();
+            } else {
+                console.log('Page visible, resuming playback');
+                if (isPlaying) {
+                    videoElement.play().catch(console.error);
+                    audioPlayer.play().catch(console.error);
+                }
+            }
+        });
         
         // Add keyboard shortcuts for speed control
         document.addEventListener('keydown', (e) => {

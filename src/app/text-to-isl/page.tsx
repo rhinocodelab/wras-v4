@@ -138,8 +138,8 @@ export default function TextToIslPage() {
     // Audio-related state variables commented out for future use:
     // const [savedAudioFiles, setSavedAudioFiles] = useState<{ en?: string; mr?: string; hi?: string; gu?: string }>({});
     const [islVideoPath, setIslVideoPath] = useState<string>(''); // Keep for video generation
-    // const [audioStates, setAudioStates] = useState<{ [key: string]: { url: string; isGenerating: boolean } }>({});
     const [isPublishing, setIsPublishing] = useState(false); // Keep for UI state management
+    // const [audioStates, setAudioStates] = useState<{ [key: string]: { url: string; isGenerating: boolean } }>({});
     // const [bulkAudioModal, setBulkAudioModal] = useState<{ isOpen: boolean; progress: { [key: string]: boolean } }>({ 
     //     isOpen: false, 
     //     progress: { english: false, marathi: false, hindi: false, gujarati: false } 
@@ -327,16 +327,6 @@ export default function TextToIslPage() {
             return;
         }
 
-        // Audio validation commented out for future use:
-        // if (!Object.values(savedAudioFiles).some(path => path)) {
-        //     toast({
-        //         variant: "destructive",
-        //         title: "No Saved Audio Files",
-        //         description: "Please save audio files first before publishing."
-        //     });
-        //     return;
-        // }
-
         if (!islPlaylist || islPlaylist.length === 0) {
             toast({
                 variant: "destructive",
@@ -346,18 +336,9 @@ export default function TextToIslPage() {
             return;
         }
 
-        setIsPublishing(true); // Keep for UI state management
+        setIsPublishing(true);
 
         try {
-            // Audio files section commented out for future use:
-            // Get all available audio files - use saved file paths instead of data URLs
-            // const audioFiles = {
-            //     en: savedAudioFiles.en,
-            //     mr: savedAudioFiles.mr,
-            //     hi: savedAudioFiles.hi,
-            //     gu: savedAudioFiles.gu
-            // };
-
             // Get all translations
             const allTranslations = {
                 en: translations.en,
@@ -366,11 +347,12 @@ export default function TextToIslPage() {
                 gu: translations.gu
             };
 
-            // Get ISL video path (use the first video in playlist for now)
-            const islVideoPath = islPlaylist[0] || '';
+            // Convert relative video path to absolute URL (same logic as Speech to ISL)
+            const baseUrl = window.location.origin;
+            const absoluteVideoPath = `${baseUrl}${islPlaylist[0]}`;
 
             // Generate HTML content directly (audio files commented out for future use)
-            const htmlContent = generateTextToIslHtml(inputText, allTranslations, islVideoPath, {}, selectedPlaybackSpeed);
+            const htmlContent = generateTextToIslHtml(inputText, allTranslations, absoluteVideoPath, {}, selectedPlaybackSpeed);
 
             // Create blob and open in new tab (like Dashboard)
             const blob = new Blob([htmlContent], { type: 'text/html' });
@@ -390,7 +372,7 @@ export default function TextToIslPage() {
                 description: "Failed to publish the announcement."
             });
         } finally {
-            setIsPublishing(false); // Keep for UI state management
+            setIsPublishing(false);
         }
     };
 
@@ -905,19 +887,9 @@ export default function TextToIslPage() {
                                 </div>
                                 
                                 <div className="mt-4 flex gap-2 flex-shrink-0">
-                                    <Button onClick={handleGenerateVideo} disabled={isGeneratingVideo || !translations.en} className="flex-1">
+                                    <Button onClick={handleGenerateVideo} disabled={isGeneratingVideo || !translations.en} className="w-full">
                                         {isGeneratingVideo ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : null}
                                         {isGeneratingVideo ? "Generating..." : "Generate ISL Video"}
-                                    </Button>
-
-                                    <Button 
-                                        variant="outline" 
-                                        onClick={handlePublish} 
-                                        disabled={isPublishing || !inputText.trim()}
-                                        className="flex-1 border-2 border-gray-300 hover:border-gray-400"
-                                    >
-                                        {isPublishing ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : null}
-                                        {isPublishing ? "Publishing..." : "Publish"}
                                     </Button>
                                 </div>
                             </div>
