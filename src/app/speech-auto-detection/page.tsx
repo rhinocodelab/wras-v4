@@ -366,6 +366,7 @@ export default function AutoSpeechDetectionPage() {
     setTranslations({});
     setConfidence(0);
     setIslPlaylist([]);
+    setIsGeneratingVideo(false);
   };
 
   const handleGenerateVideoClick = useCallback(async () => {

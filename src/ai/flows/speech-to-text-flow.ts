@@ -44,44 +44,61 @@ const transcribeAudioFlow = ai.defineFlow(
     const speechClient = new SpeechClient();
     
     const base64Data = audioDataUri.split(',')[1];
+    const mimeType = audioDataUri.split(',')[0].split(':')[1].split(';')[0];
     const audioBytes = Buffer.from(base64Data, 'base64');
     
-    // Function to detect WAV file properties
-    function getWavProperties(buffer: Buffer): { sampleRate: number; encoding: string } {
-      // WAV header structure: RIFF + size + WAVE + fmt + size + audioFormat + channels + sampleRate + byteRate + blockAlign + bitsPerSample
-      if (buffer.length < 44) {
-        return { sampleRate: 16000, encoding: 'LINEAR16' };
+    // Function to detect audio file properties
+    function getAudioProperties(buffer: Buffer, mimeType: string): { sampleRate: number; encoding: string } {
+      // Check MIME type first
+      if (mimeType.includes('audio/mpeg') || mimeType.includes('mp3')) {
+        return { sampleRate: 44100, encoding: 'MP3' };
       }
       
-      // Check if it's a WAV file (RIFF header)
-      const riffHeader = buffer.toString('ascii', 0, 4);
-      if (riffHeader !== 'RIFF') {
-        return { sampleRate: 16000, encoding: 'LINEAR16' };
+      if (mimeType.includes('audio/aac') || mimeType.includes('aac')) {
+        // AAC files - GCP doesn't natively support AAC, so we'll try MP3 encoding
+        return { sampleRate: 44100, encoding: 'MP3' };
       }
       
-      // Extract sample rate from WAV header (bytes 24-27)
-      const sampleRate = buffer.readUInt32LE(24);
-      
-      // Extract bits per sample (bytes 34-35)
-      const bitsPerSample = buffer.readUInt16LE(34);
-      
-      // Determine encoding based on bits per sample
-      let encoding: string;
-      if (bitsPerSample === 16) {
-        encoding = 'LINEAR16';
-      } else if (bitsPerSample === 8) {
-        encoding = 'LINEAR8';
-      } else {
-        encoding = 'LINEAR16'; // Default fallback
+      if (mimeType.includes('audio/wav') || mimeType.includes('wav')) {
+        // WAV header structure: RIFF + size + WAVE + fmt + size + audioFormat + channels + sampleRate + byteRate + blockAlign + bitsPerSample
+        if (buffer.length < 44) {
+          return { sampleRate: 16000, encoding: 'LINEAR16' };
+        }
+        
+        // Check if it's a WAV file (RIFF header)
+        const riffHeader = buffer.toString('ascii', 0, 4);
+        if (riffHeader !== 'RIFF') {
+          return { sampleRate: 16000, encoding: 'LINEAR16' };
+        }
+        
+        // Extract sample rate from WAV header (bytes 24-27)
+        const sampleRate = buffer.readUInt32LE(24);
+        
+        // Extract bits per sample (bytes 34-35)
+        const bitsPerSample = buffer.readUInt16LE(34);
+        
+        // Determine encoding based on bits per sample
+        let encoding: string;
+        if (bitsPerSample === 16) {
+          encoding = 'LINEAR16';
+        } else if (bitsPerSample === 8) {
+          encoding = 'LINEAR8';
+        } else {
+          encoding = 'LINEAR16'; // Default fallback
+        }
+        
+        console.log(`Detected WAV properties: sampleRate=${sampleRate}, bitsPerSample=${bitsPerSample}, encoding=${encoding}`);
+        
+        return { sampleRate, encoding };
       }
       
-      console.log(`Detected WAV properties: sampleRate=${sampleRate}, bitsPerSample=${bitsPerSample}, encoding=${encoding}`);
-      
-      return { sampleRate, encoding };
+      // Default fallback for unknown formats
+      console.log(`Unknown audio format, using default settings: ${mimeType}`);
+      return { sampleRate: 16000, encoding: 'LINEAR16' };
     }
     
     // Detect audio properties
-    const { sampleRate, encoding } = getWavProperties(audioBytes);
+    const { sampleRate, encoding } = getAudioProperties(audioBytes, mimeType);
     
     const request = {
       audio: {

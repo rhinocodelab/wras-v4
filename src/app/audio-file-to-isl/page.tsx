@@ -128,7 +128,12 @@ export default function AudioFileToIslPage() {
     const handleFileChange = (files: FileList | null) => {
         if (files && files.length > 0) {
             const file = files[0];
-            if (file.type === 'audio/wav' || file.type === 'audio/mpeg') {
+            const fileName = file.name.toLowerCase();
+            const isWav = file.type === 'audio/wav' || fileName.endsWith('.wav');
+            const isMp3 = file.type === 'audio/mpeg' || fileName.endsWith('.mp3');
+            const isAcc = file.type === 'audio/aac' || fileName.endsWith('.acc') || fileName.endsWith('.aac');
+            
+            if (isWav || isMp3 || isAcc) {
                 setAudioFile(file);
                 setTranscribedText('');
                 setTranslatedText('');
@@ -137,7 +142,7 @@ export default function AudioFileToIslPage() {
                 toast({
                     variant: 'destructive',
                     title: 'Invalid File Type',
-                    description: 'Please upload a .wav or .mp3 file.',
+                    description: 'Please upload a .wav, .mp3, or .acc/.aac file.',
                 });
             }
         }
@@ -369,13 +374,13 @@ export default function AudioFileToIslPage() {
                     >
                         <Upload className="h-8 w-8 text-muted-foreground mb-2" />
                         <p className="text-sm text-muted-foreground mb-2 text-center">
-                        {audioFile ? `Selected: ${audioFile.name}` : 'Drag & drop a .wav or .mp3 file here, or click to browse'}
+                        {audioFile ? `Selected: ${audioFile.name}` : 'Drag & drop a .wav, .mp3, or .acc/.aac file here, or click to browse'}
                         </p>
                          <Input
                             type="file"
                             id="audio-file-upload"
                             className="hidden"
-                            accept=".wav,.mp3"
+                            accept=".wav,.mp3,.acc,.aac"
                             onChange={(e) => handleFileChange(e.target.files)}
                         />
                         <label
