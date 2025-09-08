@@ -285,13 +285,13 @@ export default function AutoSpeechDetectionPage() {
       }
 
       // Step 2: Use FastAPI backend for language detection only
-      const detectResponse = await fetch('http://localhost:8000/detect-language', {
+      const detectResponse = await fetch('https://192.168.1.34:5001/detect-language', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          audio_path: `/home/funix/Projects/wras/public/temp-audio/${audioId}.webm`
+          audio_path: `/home/sdmsrv/wras-v4/public/temp-audio/${audioId}.webm`
         }),
       });
 

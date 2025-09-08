@@ -15,6 +15,7 @@ import {
   Text,
   FileAudio,
   Globe,
+  Megaphone,
 } from 'lucide-react';
 import Link from 'next/link';
 import { Sheet, SheetTrigger, SheetContent } from '@/components/ui/sheet';
@@ -34,6 +35,7 @@ import TextToIslPage from '@/app/text-to-isl/page';
 import AudioFileToIslPage from '@/app/audio-file-to-isl/page';
 import AIGeneratedAnnouncementsPage from '@/app/ai-generated-announcements/page';
 import AutoSpeechDetectionPage from '@/app/speech-auto-detection/page';
+import GeneralAnnouncementPage from '@/app/general-announcement/page';
 
 
 export default function HomePage() {
@@ -72,6 +74,8 @@ export default function HomePage() {
         return <AIGeneratedAnnouncementsPage />;
       case 'auto-speech-detection':
         return <AutoSpeechDetectionPage />;
+      case 'general-announcement':
+        return <GeneralAnnouncementPage />;
       default:
         return <Dashboard />;
     }
@@ -196,6 +200,13 @@ export default function HomePage() {
                 >
                   <Text className="h-4 w-4" />
                   Text to ISL
+                </div>
+                <div
+                  onClick={() => setActiveView('general-announcement')}
+                  className={getLinkClassName('general-announcement')}
+                >
+                  <Megaphone className="h-4 w-4" />
+                  General Announcement
                 </div>
                 <div
                   onClick={() => setActiveView('audio-file-to-isl')}

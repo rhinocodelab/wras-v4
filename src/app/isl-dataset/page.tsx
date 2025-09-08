@@ -12,10 +12,17 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { getIslVideosWithMetadata, VideoMetadata, uploadIslVideo, deleteIslVideo } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, FolderKanban, PlayCircle, FileVideo, Calendar, HardDrive, Clock, Upload, Trash2, Plus } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Loader2, FolderKanban, PlayCircle, FileVideo, Calendar, HardDrive, Clock, Upload, Trash2, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const VIDEOS_PER_PAGE = 10;
 
@@ -136,13 +143,13 @@ export default function IslDatasetPage() {
       return;
     }
 
-    // Validate file size (max 100MB)
-    const maxSize = 100 * 1024 * 1024; // 100MB
+    // Validate file size (max 3MB)
+    const maxSize = 3 * 1024 * 1024; // 3MB
     if (file.size > maxSize) {
       toast({
         variant: 'destructive',
         title: 'File Too Large',
-        description: 'Video file size must be less than 100MB',
+        description: 'Video file size must be less than 3MB',
       });
       return;
     }
@@ -386,57 +393,67 @@ export default function IslDatasetPage() {
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
           ) : videos.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {paginatedVideos.map((video) => (
-                <Card key={video.path} className="hover:shadow-md transition-shadow">
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-sm font-medium capitalize flex items-center gap-2">
-                      <FileVideo className="h-4 w-4 text-primary" />
-                      {video.name}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="pt-0">
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <div className="border rounded-lg">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[400px]">Video Name</TableHead>
+                    <TableHead className="w-[150px]">Duration</TableHead>
+                    <TableHead className="w-[150px]">Size</TableHead>
+                    <TableHead className="w-[200px] text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {paginatedVideos.map((video) => (
+                    <TableRow key={video.path} className="hover:bg-muted/50">
+                      <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
-                          <Calendar className="h-3 w-3" />
-                          <span>ISL Video</span>
+                          <FileVideo className="h-4 w-4 text-primary" />
+                          <span className="capitalize">{video.name}</span>
                         </div>
-                        <div className="flex items-center gap-1">
+                      </TableCell>
+                      <TableCell>
+                        {video.duration ? (
+                          <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                            <Clock className="h-3 w-3" />
+                            <span>{formatDuration(video.duration)}</span>
+                          </div>
+                        ) : (
+                          <span className="text-sm text-muted-foreground">Unknown</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1 text-sm text-muted-foreground">
                           <HardDrive className="h-3 w-3" />
                           <span>{(video.size / 1024 / 1024).toFixed(1)} MB</span>
                         </div>
-                      </div>
-                      {video.duration && (
-                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <Clock className="h-3 w-3" />
-                          <span>{formatDuration(video.duration)}</span>
-                        </div>
-                      )}
-                      <div className="flex justify-between items-center">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleDeleteVideo(video.path, video.name)}
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                        <DialogTrigger asChild>
-                          <Button 
-                            size="sm" 
-                            onClick={() => handlePlayClick(video.path)}
-                            className="bg-[#0F9D58] text-white hover:bg-[#0F9D58]/90 border-[#0F9D58]"
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleDeleteVideo(video.path, video.name)}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
                           >
-                            <PlayCircle className="h-4 w-4 mr-1" />
-                            Play
+                            <Trash2 className="h-4 w-4" />
                           </Button>
-                        </DialogTrigger>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                          <DialogTrigger asChild>
+                            <Button 
+                              size="sm" 
+                              onClick={() => handlePlayClick(video.path)}
+                              className="bg-[#0F9D58] text-white hover:bg-[#0F9D58]/90 border-[#0F9D58]"
+                            >
+                              <PlayCircle className="h-4 w-4 mr-1" />
+                              Play
+                            </Button>
+                          </DialogTrigger>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </div>
           ) : (
             <div className="mt-6 text-center text-muted-foreground border rounded-lg p-12">
@@ -449,27 +466,46 @@ export default function IslDatasetPage() {
         </div>
         
         {videos.length > 0 && totalPages > 1 && (
-            <div className="flex items-center justify-end space-x-2 py-4">
-                <Button
+          <div className="flex items-center justify-between py-4">
+            <div className="text-sm text-muted-foreground">
+              Showing {((currentPage - 1) * VIDEOS_PER_PAGE) + 1} to {Math.min(currentPage * VIDEOS_PER_PAGE, videos.length)} of {videos.length} videos
+            </div>
+            <div className="flex items-center space-x-2">
+              <Button
                 variant="outline"
                 size="sm"
                 onClick={prevPage}
                 disabled={currentPage === 1}
-                >
+                className="flex items-center gap-1"
+              >
+                <ChevronLeft className="h-4 w-4" />
                 Previous
-                </Button>
-                <span className="text-sm text-muted-foreground">
-                    Page {currentPage} of {totalPages}
-                </span>
-                <Button
+              </Button>
+              <div className="flex items-center space-x-1">
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                  <Button
+                    key={page}
+                    variant={currentPage === page ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setCurrentPage(page)}
+                    className="w-8 h-8 p-0"
+                  >
+                    {page}
+                  </Button>
+                ))}
+              </div>
+              <Button
                 variant="outline"
                 size="sm"
                 onClick={nextPage}
                 disabled={currentPage === totalPages}
-                >
+                className="flex items-center gap-1"
+              >
                 Next
-                </Button>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
             </div>
+          </div>
         )}
 
         <DialogContent>

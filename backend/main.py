@@ -54,10 +54,21 @@ def load_whisper_model():
     global whisper_model
     try:
         logger.info("Loading Whisper model...")
+        
+        # Check if CUDA is available
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        logger.info(f"Using device: {device}")
+        
+        if torch.cuda.is_available():
+            logger.info(f"CUDA device: {torch.cuda.get_device_name(0)}")
+            logger.info(f"CUDA device count: {torch.cuda.device_count()}")
+        else:
+            logger.info("CUDA not available, using CPU")
+        
         # Use the base model for good balance of speed and accuracy
         # For CPU usage, you could also use "tiny" or "small" for faster processing
-        whisper_model = whisper.load_model("base")
-        logger.info("Whisper model loaded successfully")
+        whisper_model = whisper.load_model("base", device=device)
+        logger.info(f"Whisper model loaded successfully on {device}")
     except Exception as e:
         logger.error(f"Failed to load Whisper model: {e}")
         raise e
@@ -75,10 +86,22 @@ async def root():
 @app.get("/health")
 async def health_check():
     """Detailed health check"""
+    device_info = {
+        "cuda_available": torch.cuda.is_available(),
+        "device": "cuda" if torch.cuda.is_available() else "cpu"
+    }
+    
+    if torch.cuda.is_available():
+        device_info.update({
+            "cuda_device_count": torch.cuda.device_count(),
+            "cuda_device_name": torch.cuda.get_device_name(0)
+        })
+    
     return {
         "status": "healthy",
         "model_loaded": whisper_model is not None,
-        "supported_languages": list(LANGUAGE_MAPPING.keys())
+        "supported_languages": list(LANGUAGE_MAPPING.keys()),
+        "device_info": device_info
     }
 
 @app.post("/detect-language", response_model=LanguageDetectionResponse)

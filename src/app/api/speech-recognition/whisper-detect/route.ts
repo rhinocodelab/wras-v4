@@ -4,7 +4,7 @@ import { readFile, unlink } from 'fs/promises';
 import { translateTextToMultipleLanguages } from '@/app/actions';
 
 // FastAPI backend URL
-const FASTAPI_BASE_URL = process.env.FASTAPI_URL || 'http://localhost:8000';
+const FASTAPI_BASE_URL = process.env.FASTAPI_URL || 'https://192.168.1.34:5001';
 
 export async function POST(request: NextRequest) {
   try {

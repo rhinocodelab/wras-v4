@@ -1005,14 +1005,6 @@ export function Dashboard() {
 
              </div>
             <DialogFooter className="mt-4">
-                <Button onClick={handleSaveAnnouncement}>
-                    <Save className="mr-2 h-4 w-4" />
-                    Save
-                </Button>
-                <Button onClick={handlePreviewPublishedAnnouncement}>
-                    <Eye className="mr-2 h-4 w-4" />
-                    Preview
-                </Button>
                 <Button variant="outline" onClick={async () => {
                     try {
                         const result = await clearIslVideoFolder();

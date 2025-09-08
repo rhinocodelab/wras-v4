@@ -2924,10 +2924,10 @@ export async function uploadIslVideo(formData: FormData): Promise<{ success: boo
             return { success: false, message: 'Please upload a valid video file' };
         }
         
-        // Validate file size (max 100MB)
-        const maxSize = 100 * 1024 * 1024; // 100MB
+        // Validate file size (max 3MB)
+        const maxSize = 3 * 1024 * 1024; // 3MB
         if (file.size > maxSize) {
-            return { success: false, message: 'Video file size must be less than 100MB' };
+            return { success: false, message: 'Video file size must be less than 3MB' };
         }
         
         // Create ISL dataset directory if it doesn't exist
