@@ -11,7 +11,8 @@ export function generateTextToIslHtml(
     translations: { en: string; mr: string; hi: string; gu: string },
     islVideoPath: string,
     audioFiles: { en?: string; mr?: string; hi?: string; gu: string },
-    playbackSpeed: number = 1.0
+    playbackSpeed: number = 1.0,
+    hideInfoHeader: boolean = false
 ): string {
     // Create language-specific data for synchronization
     // If no audio files provided, show all translations without audio
@@ -30,6 +31,7 @@ export function generateTextToIslHtml(
     const audioSources = JSON.stringify(audioPaths);
     
     // Convert video path to absolute URL - ensure it points to isl_video
+    // Use dynamic origin detection in JavaScript since we don't know the origin at build time
     const videoSources = JSON.stringify([islVideoPath]);
     
     // Generate audio elements HTML only if audio files exist
@@ -52,18 +54,25 @@ export function generateTextToIslHtml(
         .route { display: flex; align-items: center; justify-content: center; gap: 20px; }
         .video-container { width: 80%; max-width: 960px; aspect-ratio: 16 / 9; background-color: #111; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
         video { width: 100%; height: 100%; object-fit: cover; }
-        .ticker-wrap { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 1200px; background-color: #1a1a1a; padding: 20px; overflow: hidden; min-height: 80px; }
-        .ticker { display: block; text-align: center; font-size: 2.2em; transition: opacity 0.5s ease; line-height: 1.4; white-space: nowrap; margin: 0; }
+        .ticker-wrap { position: fixed; bottom: 0; left: 0; width: 100%; background-color: #1a1a1a; padding: 20px; overflow: hidden; min-height: 80px; }
+        .ticker { display: flex; align-items: center; font-size: 2.2em; line-height: 1.4; white-space: nowrap; margin: 0; animation: scroll 30s linear infinite; }
+        .ticker-item { margin-right: 100px; }
+        .ticker-separator { margin: 0 50px; color: #666; font-size: 1.5em; }
         .ticker.fade { opacity: 0.3; }
         .ticker.active { opacity: 1; }
+        @keyframes scroll {
+            0% { transform: translateX(100%); }
+            100% { transform: translateX(-100%); }
+        }
     </style>
 </head>
 <body>
     <div class="main-content">
+        ${hideInfoHeader ? '' : `
         <div class="info-header">
             <h1>ISL Announcement</h1>
             <p>${originalText}</p>
-        </div>
+        </div>`}
         <div class="video-container">
             <video id="isl-video" muted playsinline></video>
         </div>
@@ -75,8 +84,12 @@ export function generateTextToIslHtml(
     <script>
         const videoElement = document.getElementById('isl-video');
         const tickerElement = document.getElementById('ticker');
-        const videoPlaylist = ${videoSources};
-        const audioPlaylist = ${audioSources};
+        
+        // Get the current origin (for blob URLs, we need to use the parent window's origin)
+        const origin = window.opener ? window.opener.location.origin : (window.location.origin || 'http://localhost:9002');
+        
+        const videoPlaylist = ${videoSources}.map(path => origin + path);
+        const audioPlaylist = ${audioSources}.map(path => origin + path);
         const announcementData = ${announcementDataJson};
         const hasAudioFiles = ${hasAudioFiles};
         let currentSpeed = ${playbackSpeed};
@@ -94,26 +107,36 @@ export function generateTextToIslHtml(
         introAudio.src = introAudioPath;
         introAudio.volume = 1.0;` : ''}
 
+        function createScrollingTicker() {
+            if (!tickerElement || announcementData.length === 0) return;
+            
+            // Create ticker content with all languages and separators
+            const tickerContent = announcementData
+                .filter(announcement => announcement.text && announcement.text.trim())
+                .map(announcement => {
+                    return \`<span class="ticker-item">\${announcement.text}</span>\`;
+                })
+                .join('<span class="ticker-separator">•</span>');
+            
+            // Set the ticker content
+            tickerElement.innerHTML = tickerContent;
+            tickerElement.classList.add('active');
+            tickerElement.classList.remove('fade');
+        }
+        
+        function getLanguageName(languageCode) {
+            const languageNames = {
+                'en': 'English',
+                'hi': 'Hindi',
+                'mr': 'Marathi',
+                'gu': 'Gujarati'
+            };
+            return languageNames[languageCode] || languageCode.toUpperCase();
+        }
+        
         function updateTickerText(languageCode) {
-            const announcement = announcementData.find(a => a.language_code === languageCode);
-            if (announcement && tickerElement) {
-                tickerElement.textContent = announcement.text;
-                tickerElement.classList.add('active');
-                tickerElement.classList.remove('fade');
-                
-                // Adjust card width based on text content
-                setTimeout(() => {
-                    const tickerWrap = tickerElement.parentElement;
-                    const textWidth = tickerElement.scrollWidth;
-                    const minWidth = 800; // Minimum width in pixels
-                    const maxWidth = 1800; // Maximum width in pixels
-                    const padding = 40; // 20px left + 20px right padding
-                    const newWidth = Math.max(minWidth, Math.min(maxWidth, textWidth + padding));
-                    tickerWrap.style.width = newWidth + 'px';
-                    tickerWrap.style.left = '50%';
-                    tickerWrap.style.transform = 'translateX(-50%)';
-                }, 50); // Small delay to ensure text is rendered
-            }
+            // For backward compatibility, but now we use createScrollingTicker
+            createScrollingTicker();
         }
         
         function changeSpeed(speed) {
@@ -137,18 +160,15 @@ export function generateTextToIslHtml(
             
             // Play intro first
             isPlayingIntro = true;
-            fadeTickerText(); // Fade out current text during intro
+            // Keep scrolling ticker visible during intro
             
             // Reset intro audio event listener
             introAudio.onended = () => {
                 isPlayingIntro = false;
                 audioPlayer.src = audioPlaylist[currentAudioIndex];
                 
-                // Update ticker text to match the current audio language
-                const currentAnnouncement = announcementData[currentAudioIndex];
-                if (currentAnnouncement) {
-                    updateTickerText(currentAnnouncement.language_code);
-                }
+                // Keep the scrolling ticker with all languages
+                createScrollingTicker();
                 
                 audioPlayer.play().catch(e => console.error("Audio play error:", e));
                 currentAudioIndex++;
@@ -192,17 +212,13 @@ export function generateTextToIslHtml(
             if (audioPlaylist.length > 0) {
                 isPlaying = true;
                 
-                // Initialize ticker with first language text
-                if (announcementData.length > 0) {
-                    updateTickerText(announcementData[0].language_code);
-                }
+                // Initialize scrolling ticker with all languages
+                createScrollingTicker();
                 
                 playIntroThenAnnouncement();
             }` : `
-            // No audio files - just show first translation in ticker
-            if (announcementData.length > 0) {
-                updateTickerText(announcementData[0].language_code);
-            }`}
+            // No audio files - show scrolling ticker with all languages
+            createScrollingTicker();`}
         }
 
         ${hasAudioFiles ? `

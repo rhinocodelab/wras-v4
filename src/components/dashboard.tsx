@@ -19,6 +19,7 @@ import {
 import { Separator } from '@/components/ui/separator';
 import { Search, Volume2, Accessibility, Loader2, Video, Rocket, Save, Eye } from 'lucide-react';
 import { getTrainRoutes, TrainRoute, handleGenerateAnnouncement, clearAnnouncementsFolder, saveAnnouncementToDatabase, saveAnnouncementToFiles, SavedAnnouncement, clearIslVideoFolder } from '@/app/actions';
+import { generateTextToIslHtml } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 
 type DisplayRoute = TrainRoute & {
@@ -281,205 +282,37 @@ export function Dashboard() {
     const { announcements, isl_video_playlist } = generatedData;
     const { 'Train Name': trainName, 'Train Number': trainNumber, 'Start Station': startStation, 'End Station': endStation, 'Start Code': startCode, 'End Code': endCode } = currentRouteInfo;
 
-    // Convert relative paths to absolute URLs
-    const baseUrl = window.location.origin;
+    // Create the original text (train announcement)
+    const originalText = `${trainName} (${trainNumber}) from ${startStation} to ${endStation}`;
     
-    // Create language-specific data for synchronization
-    const announcementData = announcements.map(a => ({
-      language_code: a.language_code,
-      text: a.text,
-      audio_path: a.audio_path ? `${baseUrl}${a.audio_path}` : null
-    }));
-    const announcementDataJson = JSON.stringify(announcementData);
+    // Create translations object from announcements
+    const translations = {
+      en: announcements.find(a => a.language_code === 'en')?.text || originalText,
+      hi: announcements.find(a => a.language_code === 'hi')?.text || '',
+      mr: announcements.find(a => a.language_code === 'mr')?.text || '',
+      gu: announcements.find(a => a.language_code === 'gu')?.text || ''
+    };
     
-    // Convert audio paths to absolute URLs
-    const audioPaths = announcements.map(a => a.audio_path).filter(p => p !== null);
-    const absoluteAudioPaths = audioPaths.map(path => `${baseUrl}${path}`);
-    const audioSources = JSON.stringify(absoluteAudioPaths);
+    // Create audio files object
+    const audioFiles = {
+      en: announcements.find(a => a.language_code === 'en')?.audio_path || '',
+      hi: announcements.find(a => a.language_code === 'hi')?.audio_path || '',
+      mr: announcements.find(a => a.language_code === 'mr')?.audio_path || '',
+      gu: announcements.find(a => a.language_code === 'gu')?.audio_path || ''
+    };
     
-    // Convert video paths to absolute URLs
-    const absoluteVideoPaths = isl_video_playlist.map(path => `${baseUrl}${path}`);
-    const videoSources = JSON.stringify(absoluteVideoPaths);
-
-    const htmlContent = `
-      <!DOCTYPE html>
-      <html lang="en">
-      <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Announcement: ${trainName}</title>
-        <style>
-          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin: 0; background-color: #000; color: #fff; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
-          .main-content { flex-grow: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 20px; }
-          .info-header { text-align: center; margin-bottom: 20px; padding: 15px 25px; border-radius: 12px; background-color: rgba(255, 255, 255, 0.1); }
-          .info-header h1 { margin: 0; font-size: 3.2em; }
-          .info-header p { margin: 8px 0 0; font-size: 1.6em; letter-spacing: 1px; }
-          .route { display: flex; align-items: center; justify-content: center; gap: 20px; }
-          .video-container { width: 80%; max-width: 960px; aspect-ratio: 16 / 9; background-color: #111; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
-          video { width: 100%; height: 100%; object-fit: cover; }
-          .ticker-wrap { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 1200px; background-color: #1a1a1a; padding: 20px; overflow: hidden; min-height: 80px; }
-          .ticker { display: block; text-align: center; font-size: 2.2em; transition: opacity 0.5s ease; line-height: 1.4; white-space: nowrap; margin: 0; }
-          .ticker.fade { opacity: 0.3; }
-          .ticker.active { opacity: 1; }
-        </style>
-      </head>
-      <body>
-        <div class="main-content">
-          <div class="info-header">
-            <h1>${trainNumber} - ${trainName}</h1>
-            <div class="route">
-              <p>${startStation} (${startCode})</p>
-              <span>&rarr;</span>
-              <p>${endStation} (${endCode})</p>
-            </div>
-          </div>
-          <div class="video-container">
-            <video id="isl-video" muted playsinline></video>
-          </div>
-        </div>
-        <div class="ticker-wrap">
-          <div id="ticker" class="ticker"></div>
-        </div>
-        <audio id="announcement-audio"></audio>
-        <audio id="intro-audio" preload="auto"></audio>
-
-        <script>
-          const videoElement = document.getElementById('isl-video');
-          const audioPlayer = document.getElementById('announcement-audio');
-          const introAudio = document.getElementById('intro-audio');
-          const tickerElement = document.getElementById('ticker');
-          const videoPlaylist = ${videoSources};
-          const audioPlaylist = ${audioSources};
-          const announcementData = ${announcementDataJson};
-          const introAudioPath = '${baseUrl}/audio/intro_audio/intro.wav';
-          let currentAudioIndex = 0;
-          let isPlaying = false;
-          let currentSpeed = ${selectedPlaybackSpeed};
-          let isPlayingIntro = false;
-
-          // Set up intro audio
-          introAudio.src = introAudioPath;
-          introAudio.volume = 1.0;
-
-          function updateTickerText(languageCode) {
-            const announcement = announcementData.find(a => a.language_code === languageCode);
-            if (announcement && tickerElement) {
-              tickerElement.textContent = announcement.text;
-              tickerElement.classList.add('active');
-              tickerElement.classList.remove('fade');
-              
-              // Adjust card width based on text content
-              setTimeout(() => {
-                const tickerWrap = tickerElement.parentElement;
-                const textWidth = tickerElement.scrollWidth;
-                const minWidth = 800; // Minimum width in pixels
-                const maxWidth = 1800; // Maximum width in pixels
-                const padding = 40; // 20px left + 20px right padding
-                const newWidth = Math.max(minWidth, Math.min(maxWidth, textWidth + padding));
-                tickerWrap.style.width = newWidth + 'px';
-                tickerWrap.style.left = '50%';
-                tickerWrap.style.transform = 'translateX(-50%)';
-              }, 50); // Small delay to ensure text is rendered
-            }
-          }
-          
-          function changeSpeed(speed) {
-            currentSpeed = speed;
-            if (videoElement) {
-              videoElement.playbackRate = speed;
-            }
-            console.log('Playback speed changed to:', speed + 'x');
-          }
-
-          function fadeTickerText() {
-            if (tickerElement) {
-              tickerElement.classList.add('fade');
-              tickerElement.classList.remove('active');
-            }
-          }
-
-          function playIntroThenAnnouncement() {
-            if (!audioPlayer || audioPlaylist.length === 0) return;
-            
-            // Play intro first
-            isPlayingIntro = true;
-            fadeTickerText(); // Fade out current text during intro
-            
-            // Reset intro audio event listener
-            introAudio.onended = () => {
-              isPlayingIntro = false;
-              audioPlayer.src = audioPlaylist[currentAudioIndex];
-              
-              // Update ticker text to match the current audio language
-              const currentAnnouncement = announcementData[currentAudioIndex];
-              if (currentAnnouncement) {
-                updateTickerText(currentAnnouncement.language_code);
-              }
-              
-              audioPlayer.play().catch(e => console.error("Audio play error:", e));
-              currentAudioIndex++;
-            };
-            
-            introAudio.play().catch(e => console.error("Intro audio play error:", e));
-          }
-          
-          function startPlayback() {
-             if (videoPlaylist.length > 0) {
-                videoElement.src = videoPlaylist[0];
-                videoElement.loop = true;
-                videoElement.playbackRate = currentSpeed;
-                videoElement.play().catch(e => console.error("Video play error:", e));
-                
-                // Ensure video restarts when it ends (backup for loop)
-                videoElement.addEventListener('ended', () => {
-                  videoElement.currentTime = 0;
-                  videoElement.play().catch(e => console.error("Video restart error:", e));
-                });
-             }
-             if (audioPlaylist.length > 0) {
-                isPlaying = true;
-                
-                // Initialize ticker with first language text
-                if (announcementData.length > 0) {
-                  updateTickerText(announcementData[0].language_code);
-                }
-                
-                playIntroThenAnnouncement();
-             }
-          }
-
-          // Handle announcement audio ending
-          audioPlayer.addEventListener('ended', () => {
-            if (isPlaying && currentAudioIndex < audioPlaylist.length) {
-              // Continue to next announcement
-              playIntroThenAnnouncement();
-            } else if (isPlaying) {
-              // All announcements finished, restart the cycle
-              currentAudioIndex = 0;
-              setTimeout(() => {
-                if (isPlaying) {
-                  playIntroThenAnnouncement();
-                }
-              }, 1000); // 1 second pause before restarting
-            }
-          });
-          
-          // Use a more reliable event to start playback
-          window.addEventListener('load', startPlayback, { once: true });
-          
-          // Add keyboard shortcuts for speed control
-          document.addEventListener('keydown', (e) => {
-            if (e.key === '1') changeSpeed(0.5);
-            else if (e.key === '2') changeSpeed(0.75);
-            else if (e.key === '3') changeSpeed(1.0);
-            else if (e.key === '4') changeSpeed(1.25);
-            else if (e.key === '5') changeSpeed(1.5);
-            else if (e.key === '6') changeSpeed(2.0);
-          });
-        <\/script>
-      </body>
-      </html>
-    `;
+    // Use the first video from the playlist
+    const videoPath = isl_video_playlist[0] || '';
+    
+    // Generate HTML using the same function as General Announcements
+    const htmlContent = generateTextToIslHtml(
+      originalText,
+      translations,
+      videoPath,
+      audioFiles,
+      selectedPlaybackSpeed,
+      false // Show info-header for Dashboard announcements
+    );
 
     const blob = new Blob([htmlContent], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
@@ -492,205 +325,37 @@ export function Dashboard() {
     const { announcements, isl_video_playlist } = generatedData;
     const { 'Train Name': trainName, 'Train Number': trainNumber, 'Start Station': startStation, 'End Station': endStation, 'Start Code': startCode, 'End Code': endCode } = currentRouteInfo;
 
-    // Convert relative paths to absolute URLs
-    const baseUrl = window.location.origin;
+    // Create the original text (train announcement)
+    const originalText = `${trainName} (${trainNumber}) from ${startStation} to ${endStation}`;
     
-    // Create language-specific data for synchronization
-    const announcementData = announcements.map(a => ({
-      language_code: a.language_code,
-      text: a.text,
-      audio_path: a.audio_path ? `${baseUrl}${a.audio_path}` : null
-    }));
-    const announcementDataJson = JSON.stringify(announcementData);
+    // Create translations object from announcements
+    const translations = {
+      en: announcements.find(a => a.language_code === 'en')?.text || originalText,
+      hi: announcements.find(a => a.language_code === 'hi')?.text || '',
+      mr: announcements.find(a => a.language_code === 'mr')?.text || '',
+      gu: announcements.find(a => a.language_code === 'gu')?.text || ''
+    };
     
-    // Convert audio paths to absolute URLs
-    const audioPaths = announcements.map(a => a.audio_path).filter(p => p !== null);
-    const absoluteAudioPaths = audioPaths.map(path => `${baseUrl}${path}`);
-    const audioSources = JSON.stringify(absoluteAudioPaths);
+    // Create audio files object
+    const audioFiles = {
+      en: announcements.find(a => a.language_code === 'en')?.audio_path || '',
+      hi: announcements.find(a => a.language_code === 'hi')?.audio_path || '',
+      mr: announcements.find(a => a.language_code === 'mr')?.audio_path || '',
+      gu: announcements.find(a => a.language_code === 'gu')?.audio_path || ''
+    };
     
-    // Convert video paths to absolute URLs
-    const absoluteVideoPaths = isl_video_playlist.map(path => `${baseUrl}${path}`);
-    const videoSources = JSON.stringify(absoluteVideoPaths);
-
-    const htmlContent = `
-      <!DOCTYPE html>
-      <html lang="en">
-      <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Announcement: ${trainName}</title>
-        <style>
-          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin: 0; background-color: #000; color: #fff; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
-          .main-content { flex-grow: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 20px; }
-          .info-header { text-align: center; margin-bottom: 20px; padding: 15px 25px; border-radius: 12px; background-color: rgba(255, 255, 255, 0.1); }
-          .info-header h1 { margin: 0; font-size: 3.2em; }
-          .info-header p { margin: 8px 0 0; font-size: 1.6em; letter-spacing: 1px; }
-          .route { display: flex; align-items: center; justify-content: center; gap: 20px; }
-          .video-container { width: 80%; max-width: 960px; aspect-ratio: 16 / 9; background-color: #111; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
-          video { width: 100%; height: 100%; object-fit: cover; }
-          .ticker-wrap { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 1200px; background-color: #1a1a1a; padding: 20px; overflow: hidden; min-height: 80px; }
-          .ticker { display: block; text-align: center; font-size: 2.2em; transition: opacity 0.5s ease; line-height: 1.4; white-space: nowrap; margin: 0; }
-          .ticker.fade { opacity: 0.3; }
-          .ticker.active { opacity: 1; }
-        </style>
-      </head>
-      <body>
-        <div class="main-content">
-          <div class="info-header">
-            <h1>${trainNumber} - ${trainName}</h1>
-            <div class="route">
-              <p>${startStation} (${startCode})</p>
-              <span>&rarr;</span>
-              <p>${endStation} (${endCode})</p>
-            </div>
-          </div>
-          <div class="video-container">
-            <video id="isl-video" muted playsinline></video>
-          </div>
-        </div>
-        <div class="ticker-wrap">
-          <div id="ticker" class="ticker"></div>
-        </div>
-        <audio id="announcement-audio"></audio>
-        <audio id="intro-audio" preload="auto"></audio>
-
-        <script>
-          const videoElement = document.getElementById('isl-video');
-          const audioPlayer = document.getElementById('announcement-audio');
-          const introAudio = document.getElementById('intro-audio');
-          const tickerElement = document.getElementById('ticker');
-          const videoPlaylist = ${videoSources};
-          const audioPlaylist = ${audioSources};
-          const announcementData = ${announcementDataJson};
-          const introAudioPath = '${baseUrl}/audio/intro_audio/intro.wav';
-          let currentAudioIndex = 0;
-          let isPlaying = false;
-          let currentSpeed = ${selectedPlaybackSpeed};
-          let isPlayingIntro = false;
-
-          // Set up intro audio
-          introAudio.src = introAudioPath;
-          introAudio.volume = 1.0;
-
-          function updateTickerText(languageCode) {
-            const announcement = announcementData.find(a => a.language_code === languageCode);
-            if (announcement && tickerElement) {
-              tickerElement.textContent = announcement.text;
-              tickerElement.classList.add('active');
-              tickerElement.classList.remove('fade');
-              
-              // Adjust card width based on text content
-              setTimeout(() => {
-                const tickerWrap = tickerElement.parentElement;
-                const textWidth = tickerElement.scrollWidth;
-                const minWidth = 800; // Minimum width in pixels
-                const maxWidth = 1800; // Maximum width in pixels
-                const padding = 40; // 20px left + 20px right padding
-                const newWidth = Math.max(minWidth, Math.min(maxWidth, textWidth + padding));
-                tickerWrap.style.width = newWidth + 'px';
-                tickerWrap.style.left = '50%';
-                tickerWrap.style.transform = 'translateX(-50%)';
-              }, 50); // Small delay to ensure text is rendered
-            }
-          }
-          
-          function changeSpeed(speed) {
-            currentSpeed = speed;
-            if (videoElement) {
-              videoElement.playbackRate = speed;
-            }
-            console.log('Playback speed changed to:', speed + 'x');
-          }
-
-          function fadeTickerText() {
-            if (tickerElement) {
-              tickerElement.classList.add('fade');
-              tickerElement.classList.remove('active');
-            }
-          }
-
-          function playIntroThenAnnouncement() {
-            if (!audioPlayer || audioPlaylist.length === 0) return;
-            
-            // Play intro first
-            isPlayingIntro = true;
-            fadeTickerText(); // Fade out current text during intro
-            
-            // Reset intro audio event listener
-            introAudio.onended = () => {
-              isPlayingIntro = false;
-              audioPlayer.src = audioPlaylist[currentAudioIndex];
-              
-              // Update ticker text to match the current audio language
-              const currentAnnouncement = announcementData[currentAudioIndex];
-              if (currentAnnouncement) {
-                updateTickerText(currentAnnouncement.language_code);
-              }
-              
-              audioPlayer.play().catch(e => console.error("Audio play error:", e));
-              currentAudioIndex++;
-            };
-            
-            introAudio.play().catch(e => console.error("Intro audio play error:", e));
-          }
-          
-          function startPlayback() {
-             if (videoPlaylist.length > 0) {
-                videoElement.src = videoPlaylist[0];
-                videoElement.loop = true;
-                videoElement.playbackRate = currentSpeed;
-                videoElement.play().catch(e => console.error("Video play error:", e));
-                
-                // Ensure video restarts when it ends (backup for loop)
-                videoElement.addEventListener('ended', () => {
-                  videoElement.currentTime = 0;
-                  videoElement.play().catch(e => console.error("Video restart error:", e));
-                });
-             }
-             if (audioPlaylist.length > 0) {
-                isPlaying = true;
-                
-                // Initialize ticker with first language text
-                if (announcementData.length > 0) {
-                  updateTickerText(announcementData[0].language_code);
-                }
-                
-                playIntroThenAnnouncement();
-             }
-          }
-
-          // Handle announcement audio ending
-          audioPlayer.addEventListener('ended', () => {
-            if (isPlaying && currentAudioIndex < audioPlaylist.length) {
-              // Continue to next announcement
-              playIntroThenAnnouncement();
-            } else if (isPlaying) {
-              // All announcements finished, restart the cycle
-              currentAudioIndex = 0;
-              setTimeout(() => {
-                if (isPlaying) {
-                  playIntroThenAnnouncement();
-                }
-              }, 1000); // 1 second pause before restarting
-            }
-          });
-          
-          // Use a more reliable event to start playback
-          window.addEventListener('load', startPlayback, { once: true });
-          
-          // Add keyboard shortcuts for speed control
-          document.addEventListener('keydown', (e) => {
-            if (e.key === '1') changeSpeed(0.5);
-            else if (e.key === '2') changeSpeed(0.75);
-            else if (e.key === '3') changeSpeed(1.0);
-            else if (e.key === '4') changeSpeed(1.25);
-            else if (e.key === '5') changeSpeed(1.5);
-            else if (e.key === '6') changeSpeed(2.0);
-          });
-        <\/script>
-      </body>
-      </html>
-    `;
+    // Use the first video from the playlist
+    const videoPath = isl_video_playlist[0] || '';
+    
+    // Generate HTML using the same function as General Announcements
+    const htmlContent = generateTextToIslHtml(
+      originalText,
+      translations,
+      videoPath,
+      audioFiles,
+      1.0, // Default playback speed
+      false // Show info-header for Dashboard announcements
+    );
 
     const blob = new Blob([htmlContent], { type: 'text/html' });
     const url = URL.createObjectURL(blob);

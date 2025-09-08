@@ -168,6 +168,21 @@ export async function getDb() {
     )
   `);
 
+  // General Announcements Table
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS general_announcements (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      original_text TEXT NOT NULL,
+      translations TEXT NOT NULL, -- JSON string: {en: "text", mr: "text", hi: "text", gu: "text"}
+      isl_video_playlist TEXT NOT NULL, -- JSON string: ["path1", "path2"]
+      file_path TEXT NOT NULL,
+      status TEXT DEFAULT 'active',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
   return db;
 }
 
@@ -180,6 +195,18 @@ export type TrainRoute = {
   'Start Code': string;
   'End Station': string;
   'End Code': string;
+};
+
+export type GeneralAnnouncement = {
+  id?: number;
+  title: string;
+  original_text: string;
+  translations: { en: string; mr: string; hi: string; gu: string };
+  isl_video_playlist: string[];
+  file_path: string;
+  status?: string;
+  created_at?: string;
+  updated_at?: string;
 };
 
 export async function addTrainRoute(route: Omit<TrainRoute, 'id'>) {
@@ -2778,6 +2805,161 @@ export async function getTextToIslAudioFiles(projectId?: number): Promise<TextTo
   return await db.all(query, params);
 }
 
+// General Announcements Database Functions
+export async function saveGeneralAnnouncement(announcement: GeneralAnnouncement): Promise<number> {
+    const db = await getDb();
+    
+    // Move the video file from public/isl_video to public/general_announcements
+    const savedVideoPath = await moveGeneralAnnouncementVideo(announcement);
+    
+    // Update the playlist to reflect the new video path
+    const updatedPlaylist = [savedVideoPath];
+    
+    const result = await db.run(`
+        INSERT INTO general_announcements (
+            title, original_text, translations, isl_video_playlist, file_path, status
+        ) VALUES (?, ?, ?, ?, ?, ?)
+    `, [
+        announcement.title,
+        announcement.original_text,
+        JSON.stringify(announcement.translations),
+        JSON.stringify(updatedPlaylist), // Use the updated playlist with new path
+        savedVideoPath, // Use the moved video path
+        announcement.status || 'active'
+    ]);
+    
+    await db.close();
+    return result.lastID!;
+}
+
+export async function moveGeneralAnnouncementVideo(announcement: GeneralAnnouncement): Promise<string> {
+    const fs = await import('fs/promises');
+    const path = await import('path');
+    
+    try {
+        // Create general_announcements directory if it doesn't exist
+        const generalAnnouncementsDir = path.join(process.cwd(), 'public', 'general_announcements');
+        await fs.mkdir(generalAnnouncementsDir, { recursive: true });
+        
+        // Generate a unique filename based on title and timestamp
+        const timestamp = Date.now();
+        const sanitizedTitle = announcement.title.toLowerCase().replace(/[^a-zA-Z0-9]/g, '_');
+        const fileName = `${sanitizedTitle}_${timestamp}.mp4`;
+        const destPath = path.join(generalAnnouncementsDir, fileName);
+        
+        // Use the first video from the playlist (this should be the generated video from isl_video folder)
+        const sourceVideoPath = announcement.isl_video_playlist.length > 0 
+            ? announcement.isl_video_playlist[0] 
+            : announcement.file_path;
+        
+        if (!sourceVideoPath) {
+            throw new Error('No video path available to move');
+        }
+        
+        const sourcePath = path.join(process.cwd(), 'public', sourceVideoPath);
+        
+        // Check if source file exists
+        try {
+            await fs.access(sourcePath);
+        } catch (error) {
+            throw new Error(`Source video file not found: ${sourcePath}`);
+        }
+        
+        // Move the file (instead of copying)
+        await fs.rename(sourcePath, destPath);
+        
+        // Return the relative path for database storage
+        const relativePath = `/general_announcements/${fileName}`;
+        console.log(`General announcement video moved: ${sourcePath} -> ${destPath}`);
+        
+        return relativePath;
+        
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('Error moving general announcement video:', errorMessage);
+        throw new Error(`Failed to move video file: ${errorMessage}`);
+    }
+}
+
+export async function getGeneralAnnouncements(): Promise<GeneralAnnouncement[]> {
+  const db = await getDb();
+  
+  const announcements = await db.all(`
+    SELECT * FROM general_announcements 
+    WHERE status = 'active' 
+    ORDER BY created_at DESC
+  `);
+  
+  await db.close();
+  
+  return announcements.map(announcement => ({
+    ...announcement,
+    translations: JSON.parse(announcement.translations),
+    isl_video_playlist: JSON.parse(announcement.isl_video_playlist)
+  }));
+}
+
+export async function deleteGeneralAnnouncement(id: number): Promise<{ success: boolean; message: string }> {
+  const db = await getDb();
+  
+  try {
+    // First, get the announcement data to find the video file path
+    const announcement = await db.get(`
+      SELECT file_path, isl_video_playlist FROM general_announcements WHERE id = ?
+    `, [id]);
+    
+    if (!announcement) {
+      await db.close();
+      return { success: false, message: 'Announcement not found' };
+    }
+    
+    // Delete the video file from public/general_announcements
+    try {
+      const videoPath = announcement.file_path || (announcement.isl_video_playlist ? JSON.parse(announcement.isl_video_playlist)[0] : null);
+      
+      if (videoPath) {
+        const fs = await import('fs/promises');
+        const path = await import('path');
+        const fullVideoPath = path.join(process.cwd(), 'public', videoPath);
+        
+        // Check if file exists and delete it
+        try {
+          await fs.access(fullVideoPath);
+          await fs.unlink(fullVideoPath);
+          console.log(`Deleted video file: ${fullVideoPath}`);
+        } catch (fileError) {
+          console.warn(`Could not delete video file ${fullVideoPath}:`, fileError);
+          // Continue with database deletion even if file deletion fails
+        }
+      }
+    } catch (fileError) {
+      console.warn('Error deleting video file:', fileError);
+      // Continue with database deletion even if file deletion fails
+    }
+    
+    // Mark the announcement as deleted in the database
+    const result = await db.run(`
+      UPDATE general_announcements 
+      SET status = 'deleted', updated_at = CURRENT_TIMESTAMP 
+      WHERE id = ?
+    `, [id]);
+    
+    await db.close();
+    
+    if (result.changes === 0) {
+      return { success: false, message: 'Announcement not found' };
+    }
+    
+    return { success: true, message: 'Announcement and video file deleted successfully' };
+  } catch (error) {
+    await db.close();
+    return { 
+      success: false, 
+      message: `Failed to delete announcement: ${error instanceof Error ? error.message : 'Unknown error'}` 
+    };
+  }
+}
+
 async function testVideoPlayback(videoPath: string): Promise<{ success: boolean; error?: string }> {
     try {
         console.log(`Testing video playback for: ${videoPath}`);
@@ -2888,6 +3070,56 @@ export async function clearIslVideoFolder(): Promise<{ success: boolean; message
         return { 
             success: false, 
             message: `Failed to clear ISL video folder: ${errorMessage}` 
+        };
+    }
+}
+
+export async function clearGeneralAnnouncementVideos(): Promise<{ success: boolean; message: string }> {
+    try {
+        const generalAnnouncementsDir = path.join(process.cwd(), 'public', 'general_announcements');
+        
+        // Check if directory exists
+        try {
+            await fs.access(generalAnnouncementsDir);
+        } catch {
+            return { success: true, message: 'General announcements folder does not exist' };
+        }
+        
+        // Read all files in the directory
+        const files = await fs.readdir(generalAnnouncementsDir);
+        
+        if (files.length === 0) {
+            return { success: true, message: 'General announcements folder is already empty' };
+        }
+        
+        // Delete all files in the directory
+        const deletePromises = files.map(async (filename) => {
+            const filePath = path.join(generalAnnouncementsDir, filename);
+            try {
+                const stat = await fs.stat(filePath);
+                if (stat.isFile()) {
+                    await fs.unlink(filePath);
+                    console.log(`Deleted general announcement file: ${filename}`);
+                }
+            } catch (error) {
+                console.warn(`Could not delete file ${filename}:`, error);
+            }
+        });
+        
+        await Promise.all(deletePromises);
+        
+        console.log(`Cleared ${files.length} files from general announcements folder`);
+        return { 
+            success: true, 
+            message: `Successfully cleared ${files.length} files from general announcements folder` 
+        };
+        
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('Error clearing general announcements folder:', errorMessage);
+        return { 
+            success: false, 
+            message: `Failed to clear general announcements folder: ${errorMessage}` 
         };
     }
 }

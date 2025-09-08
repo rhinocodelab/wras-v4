@@ -13,6 +13,12 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import {
   Table,
   TableBody,
   TableCell,
@@ -22,26 +28,17 @@ import {
 } from '@/components/ui/table';
 import { Loader2, Languages, MessageSquare, Video, Text, Film, Rocket, Globe, Volume2, Megaphone, PlayCircle, FileVideo, Calendar, HardDrive, Clock, Trash2, Plus, ChevronLeft, ChevronRight, Save } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { translateInputText, getIslVideoPlaylist, translateTextToMultipleLanguages, generateTextToSpeech, saveTextToIslAudio } from '@/app/actions';
+import { translateInputText, getIslVideoPlaylist, translateTextToMultipleLanguages, generateTextToSpeech, saveTextToIslAudio, saveGeneralAnnouncement, getGeneralAnnouncements, deleteGeneralAnnouncement, clearIslVideoFolder, GeneralAnnouncement } from '@/app/actions';
 import { generateTextToIslHtml } from '@/lib/utils';
 
 // Source language is fixed to English only
 const SOURCE_LANGUAGE = 'en';
 
-// Types for general announcements
-interface GeneralAnnouncement {
-  id: string;
-  title: string;
-  text: string;
-  translations: { en: string; mr: string; hi: string; gu: string };
-  islPlaylist: string[];
-  createdAt: string;
-  filePath: string;
-}
+// Using GeneralAnnouncement type from actions.ts
 
 const VIDEOS_PER_PAGE = 10;
 
-const IslVideoPlayer = ({ playlist, title, onPublish }: { playlist: string[]; title: string; onPublish?: (playbackSpeed: number) => void }) => {
+const IslVideoPlayer = ({ playlist, title }: { playlist: string[]; title: string }) => {
     const videoRef = useRef<HTMLVideoElement>(null);
     const [currentVideoIndex, setCurrentVideoIndex] = useState(0);
     const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
@@ -68,11 +65,11 @@ const IslVideoPlayer = ({ playlist, title, onPublish }: { playlist: string[]; ti
     };
 
     if (!playlist || playlist.length === 0) {
-        return (
-            <div className="flex flex-col items-center justify-center h-full bg-muted rounded-lg p-4 text-center">
-                <Video className="h-12 w-12 text-muted-foreground mb-4" />
-                <h3 className="text-lg font-semibold">{title}</h3>
-                <p className="text-sm text-muted-foreground">Video will appear here.</p>
+            return (
+                <div className="flex flex-col items-center justify-center h-[400px] bg-muted rounded-lg p-4 text-center">
+                <Video className="h-8 w-8 text-muted-foreground mb-2" />
+                <h3 className="text-sm font-semibold">{title}</h3>
+                <p className="text-xs text-muted-foreground">Video will appear here.</p>
             </div>
         )
     }
@@ -80,12 +77,12 @@ const IslVideoPlayer = ({ playlist, title, onPublish }: { playlist: string[]; ti
     const currentVideo = playlist[currentVideoIndex];
     const videoName = currentVideo.split('/').pop()?.replace('.mp4', '').replace(/_/g, ' ') || 'Unknown';
 
-    return (
-        <div className="h-full flex flex-col min-h-0">
-            <div className="flex-1 min-h-0 flex flex-col">
+        return (
+            <div className="h-[400px] flex flex-col">
+            <div className="flex-1 flex flex-col">
                 <video
                     ref={videoRef}
-                    className="w-full h-full rounded-md bg-black object-cover"
+                    className="w-full h-[250px] rounded-md bg-black object-cover"
                     controls={false}
                     autoPlay
                     muted
@@ -97,7 +94,7 @@ const IslVideoPlayer = ({ playlist, title, onPublish }: { playlist: string[]; ti
                     Your browser does not support the video tag.
                 </video>
             </div>
-            <div className="p-2 bg-muted rounded-md mt-2 flex-shrink-0">
+            <div className="p-3 pb-4 bg-muted rounded-md mt-2 flex-shrink-0">
                 <div>
                     <h3 className="font-semibold text-xs mb-1">ISL Video Sequence</h3>
                     <p className="text-xs text-muted-foreground">
@@ -111,7 +108,7 @@ const IslVideoPlayer = ({ playlist, title, onPublish }: { playlist: string[]; ti
                     </div>
                     
                     {/* Playback Speed Controls */}
-                    <div className="mt-2">
+                    <div className="mt-3">
                         <label className="text-xs font-medium text-muted-foreground">Playback Speed:</label>
                         <div className="flex gap-1 mt-1">
                             {[0.5, 0.75, 1.0, 1.25, 1.5, 2.0].map((speed) => (
@@ -128,20 +125,6 @@ const IslVideoPlayer = ({ playlist, title, onPublish }: { playlist: string[]; ti
                         </div>
                     </div>
                     
-                    {/* Publish Button */}
-                    {onPublish && playlist.length > 0 && (
-                        <div className="mt-2">
-                            <Button 
-                                onClick={() => onPublish(playbackSpeed)} 
-                                className="w-full" 
-                                size="sm"
-                                disabled={playlist.length === 0}
-                            >
-                                <Rocket className="mr-2 h-4 w-4" />
-                                Publish Announcement
-                            </Button>
-                        </div>
-                    )}
                 </div>
             </div>
         </div>
@@ -216,25 +199,8 @@ export default function GeneralAnnouncementPage() {
     const fetchAnnouncements = async () => {
         setIsLoading(true);
         try {
-            // TODO: Implement API call to fetch saved general announcements
-            // For now, using mock data
-            const mockAnnouncements: GeneralAnnouncement[] = [
-                {
-                    id: '1',
-                    title: 'Welcome Announcement',
-                    text: 'Welcome to our railway station',
-                    translations: {
-                        en: 'Welcome to our railway station',
-                        hi: 'हमारे रेलवे स्टेशन में आपका स्वागत है',
-                        mr: 'आमच्या रेल्वे स्टेशनमध्ये आपले स्वागत आहे',
-                        gu: 'અમારા રેલવે સ્ટેશનમાં આપનું સ્વાગત છે'
-                    },
-                    islPlaylist: ['/isl_dataset/welcome/welcome.mp4'],
-                    createdAt: new Date().toISOString(),
-                    filePath: '/general_announcements/welcome_announcement.mp4'
-                }
-            ];
-            setAnnouncements(mockAnnouncements);
+            const announcements = await getGeneralAnnouncements();
+            setAnnouncements(announcements);
         } catch (error) {
             toast({
                 variant: 'destructive',
@@ -247,18 +213,26 @@ export default function GeneralAnnouncementPage() {
         }
     };
 
-    const handleDeleteAnnouncement = async (id: string, title: string) => {
+    const handleDeleteAnnouncement = async (id: number, title: string) => {
         if (!confirm(`Are you sure you want to delete "${title}"?`)) {
             return;
         }
 
         try {
-            // TODO: Implement API call to delete announcement
-            setAnnouncements(prev => prev.filter(ann => ann.id !== id));
-            toast({
-                title: 'Success',
-                description: 'Announcement deleted successfully.',
-            });
+            const result = await deleteGeneralAnnouncement(id);
+            if (result.success) {
+                setAnnouncements(prev => prev.filter(ann => ann.id !== id));
+                toast({
+                    title: 'Success',
+                    description: result.message,
+                });
+            } else {
+                toast({
+                    variant: 'destructive',
+                    title: 'Error',
+                    description: result.message,
+                });
+            }
         } catch (error) {
             toast({
                 variant: 'destructive',
@@ -313,8 +287,8 @@ export default function GeneralAnnouncementPage() {
         try {
             const processedText = addSpacesToDigits(inputText);
             const result = await getIslVideoPlaylist(processedText);
-            setIslPlaylist(result);
-            setIslVideoPath(result[0] || '');
+            setIslPlaylist(result.playlist);
+            setIslVideoPath(result.playlist[0] || '');
         } catch (error) {
             console.error('Video generation error:', error);
             toast({
@@ -357,18 +331,25 @@ export default function GeneralAnnouncementPage() {
 
         setIsSaving(true);
         try {
-            // TODO: Implement API call to save announcement
             const newAnnouncement: GeneralAnnouncement = {
-                id: Date.now().toString(),
                 title: announcementTitle,
-                text: inputText,
+                original_text: inputText,
                 translations,
-                islPlaylist,
-                createdAt: new Date().toISOString(),
-                filePath: `/general_announcements/${announcementTitle.toLowerCase().replace(/\s+/g, '_')}.mp4`
+                isl_video_playlist: islPlaylist,
+                file_path: '' // Will be set by the save function after copying the video
             };
 
-            setAnnouncements(prev => [newAnnouncement, ...prev]);
+            const savedId = await saveGeneralAnnouncement(newAnnouncement);
+            
+            // Get the saved announcement with the actual file path
+            const savedAnnouncements = await getGeneralAnnouncements();
+            const savedAnnouncement = savedAnnouncements.find(a => a.id === savedId);
+            
+            if (!savedAnnouncement) {
+                throw new Error('Failed to retrieve saved announcement');
+            }
+            
+            setAnnouncements(prev => [savedAnnouncement, ...prev]);
             
             // Reset form
             setAnnouncementTitle('');
@@ -406,12 +387,24 @@ export default function GeneralAnnouncementPage() {
 
         setIsPublishing(true);
         try {
+            // Use the first video from the playlist, or fallback to islVideoPath
+            const videoPath = islPlaylist[0] || islVideoPath;
+            
+            if (!videoPath) {
+                throw new Error("No video path available");
+            }
+
+            console.log('Publishing with video path:', videoPath);
+            console.log('ISL Playlist:', islPlaylist);
+            console.log('ISL Video Path:', islVideoPath);
+
             const htmlContent = generateTextToIslHtml(
                 inputText,
                 translations,
-                islVideoPath,
-                {}, // No audio files for now
-                playbackSpeed
+                videoPath,
+                { en: '', mr: '', hi: '', gu: '' }, // No audio files for now
+                playbackSpeed,
+                true // Hide info-header for General Announcement
             );
 
             const blob = new Blob([htmlContent], { type: 'text/html' });
@@ -422,19 +415,81 @@ export default function GeneralAnnouncementPage() {
             toast({
                 variant: "destructive",
                 title: "Publish Error",
-                description: "Failed to publish announcement. Please try again."
+                description: `Failed to publish announcement: ${error instanceof Error ? error.message : String(error)}`
             });
         } finally {
             setIsPublishing(false);
         }
     };
 
-    const handleClearForm = () => {
-        setAnnouncementTitle('');
-        setInputText('');
-        setTranslations({ en: '', mr: '', hi: '', gu: '' });
-        setIslPlaylist([]);
-        setIslVideoPath('');
+    const handleClearForm = async () => {
+        try {
+            // Clear the form state
+            setAnnouncementTitle('');
+            setInputText('');
+            setTranslations({ en: '', mr: '', hi: '', gu: '' });
+            setIslPlaylist([]);
+            setIslVideoPath('');
+            
+            // Clear generated ISL videos from temporary folder
+            const result = await clearIslVideoFolder();
+            if (result.success) {
+                console.log('ISL video folder cleared:', result.message);
+            } else {
+                console.warn('Failed to clear ISL video folder:', result.message);
+                toast({
+                    variant: "destructive",
+                    title: "Warning",
+                    description: "Form cleared but failed to delete some video files."
+                });
+            }
+        } catch (error) {
+            console.error('Error clearing form:', error);
+            toast({
+                variant: "destructive",
+                title: "Error",
+                description: "Failed to clear form completely."
+            });
+        }
+    };
+
+    const handlePublishFromTable = async (announcement: GeneralAnnouncement) => {
+        try {
+            const videoPath = announcement.isl_video_playlist[0] || announcement.file_path;
+            
+            if (!videoPath) {
+                toast({
+                    variant: "destructive",
+                    title: "Error",
+                    description: "No video available for this announcement."
+                });
+                return;
+            }
+
+            console.log('Publishing announcement from table:', announcement.title);
+            console.log('Video path:', videoPath);
+            console.log('Translations:', announcement.translations);
+
+            const htmlContent = generateTextToIslHtml(
+                announcement.original_text,
+                announcement.translations,
+                videoPath,
+                { en: '', mr: '', hi: '', gu: '' }, // No audio files for now
+                1.0, // Default playback speed
+                true // Hide info-header for General Announcement
+            );
+
+            const blob = new Blob([htmlContent], { type: 'text/html' });
+            const url = URL.createObjectURL(blob);
+            window.open(url, '_blank');
+        } catch (error) {
+            console.error('Publish error:', error);
+            toast({
+                variant: "destructive",
+                title: "Publish Error",
+                description: `Failed to publish announcement: ${error instanceof Error ? error.message : String(error)}`
+            });
+        }
     };
 
     if (showGenerateForm) {
@@ -562,33 +617,42 @@ export default function GeneralAnnouncementPage() {
 
                     {/* Right Column - Video Player */}
                     <div className="flex flex-col">
-                        <Card className="flex-1">
-                            <CardHeader>
+                        <Card className="h-[500px] flex flex-col">
+                            <CardHeader className="flex-shrink-0">
                                 <CardTitle className="flex items-center gap-2">
                                     <Film className="h-5 w-5 text-primary" />
                                     ISL Video Preview
                                 </CardTitle>
                             </CardHeader>
-                            <CardContent className="h-full">
+                            <CardContent className="flex-1 min-h-0">
                                 <IslVideoPlayer 
                                     playlist={islPlaylist} 
                                     title="ISL Video Preview"
-                                    onPublish={handlePublish}
                                 />
                             </CardContent>
                         </Card>
 
-                        {/* Save Button */}
-                        <div className="mt-4">
+                        {/* Action Buttons */}
+                        <div className="mt-6 flex gap-2">
+                            <Button 
+                                onClick={() => handlePublish(1.0)}
+                                disabled={isPublishing || !inputText.trim() || islPlaylist.length === 0}
+                                className="flex-1"
+                                size="lg"
+                            >
+                                {isPublishing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                <Rocket className="mr-2 h-4 w-4" />
+                                {isPublishing ? 'Publishing...' : 'Publish'}
+                            </Button>
                             <Button 
                                 onClick={handleSaveAnnouncement}
                                 disabled={isSaving || !announcementTitle.trim() || !inputText.trim() || islPlaylist.length === 0}
-                                className="w-full"
+                                className="flex-1"
                                 size="lg"
                             >
                                 {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                                 <Save className="mr-2 h-4 w-4" />
-                                {isSaving ? 'Saving...' : 'Save General Announcement'}
+                                {isSaving ? 'Saving...' : 'Save'}
                             </Button>
                         </div>
                     </div>
@@ -647,7 +711,8 @@ export default function GeneralAnnouncementPage() {
                     ) : (
                         <>
                             <div className="border rounded-lg">
-                                <Table>
+                                <TooltipProvider>
+                                    <Table>
                                     <TableHeader>
                                         <TableRow>
                                             <TableHead className="w-[300px]">Title</TableHead>
@@ -667,20 +732,27 @@ export default function GeneralAnnouncementPage() {
                                                     </div>
                                                 </TableCell>
                                                 <TableCell>
-                                                    <div className="text-sm text-muted-foreground max-w-[200px] truncate">
-                                                        {announcement.text}
-                                                    </div>
+                                                    <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                            <div className="text-sm text-muted-foreground max-w-[200px] truncate cursor-help">
+                                                                {announcement.original_text}
+                                                            </div>
+                                                        </TooltipTrigger>
+                                                        <TooltipContent className="max-w-[400px]">
+                                                            <p className="text-sm">{announcement.original_text}</p>
+                                                        </TooltipContent>
+                                                    </Tooltip>
                                                 </TableCell>
                                                 <TableCell>
                                                     <div className="flex items-center gap-1 text-sm text-muted-foreground">
                                                         <Calendar className="h-3 w-3" />
-                                                        <span>{new Date(announcement.createdAt).toLocaleDateString()}</span>
+                                                        <span>{new Date(announcement.created_at || '').toLocaleDateString()}</span>
                                                     </div>
                                                 </TableCell>
                                                 <TableCell>
                                                     <div className="flex items-center gap-1 text-sm text-muted-foreground">
                                                         <Video className="h-3 w-3" />
-                                                        <span>{announcement.islPlaylist.length}</span>
+                                                        <span>{announcement.isl_video_playlist.length}</span>
                                                     </div>
                                                 </TableCell>
                                                 <TableCell className="text-right">
@@ -688,14 +760,22 @@ export default function GeneralAnnouncementPage() {
                                                         <Button
                                                             size="sm"
                                                             variant="outline"
-                                                            onClick={() => handleDeleteAnnouncement(announcement.id, announcement.title)}
+                                                            onClick={() => handleDeleteAnnouncement(announcement.id!, announcement.title)}
                                                             className="text-red-600 hover:text-red-700 hover:bg-red-50"
                                                         >
                                                             <Trash2 className="h-4 w-4" />
                                                         </Button>
                                                         <Button
                                                             size="sm"
-                                                            onClick={() => handlePlayClick(announcement.islPlaylist[0] || '')}
+                                                            onClick={() => handlePublishFromTable(announcement)}
+                                                            className="bg-blue-600 text-white hover:bg-blue-700 border-blue-600"
+                                                        >
+                                                            <Rocket className="h-4 w-4 mr-1" />
+                                                            Publish
+                                                        </Button>
+                                                        <Button
+                                                            size="sm"
+                                                            onClick={() => handlePlayClick(announcement.isl_video_playlist[0] || '')}
                                                             className="bg-[#0F9D58] text-white hover:bg-[#0F9D58]/90 border-[#0F9D58]"
                                                         >
                                                             <PlayCircle className="h-4 w-4 mr-1" />
@@ -707,6 +787,7 @@ export default function GeneralAnnouncementPage() {
                                         ))}
                                     </TableBody>
                                 </Table>
+                                </TooltipProvider>
                             </div>
 
                             {/* Pagination */}
