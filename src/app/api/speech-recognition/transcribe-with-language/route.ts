@@ -3,6 +3,7 @@ import { SpeechClient } from '@google-cloud/speech';
 import { readFile, unlink } from 'fs/promises';
 import { join } from 'path';
 import { translateTextToMultipleLanguages } from '@/app/actions';
+import { detectAudioLanguage } from '@/ai/speech-language-detection';
 
 // Set the GOOGLE_APPLICATION_CREDENTIALS environment variable
 const credentialsPath = join(process.cwd(), 'config', 'isl.json');
@@ -18,6 +19,18 @@ const LANGUAGE_MAPPING = {
   'hi-IN': 'Hindi',
   'mr-IN': 'Marathi',
   'gu-IN': 'Gujarati'
+};
+
+// Reverse mapping for Gemini language detection
+const LANGUAGE_NAME_TO_CODE = {
+  'english': 'en-IN',
+  'hindi': 'hi-IN',
+  'marathi': 'mr-IN',
+  'gujarati': 'gu-IN',
+  'en': 'en-IN',
+  'hi': 'hi-IN',
+  'mr': 'mr-IN',
+  'gu': 'gu-IN'
 };
 
 export async function POST(request: NextRequest) {
@@ -99,16 +112,16 @@ export async function POST(request: NextRequest) {
       
       console.log(`Using audio config: encoding=${encoding}, sampleRateHertz=${sampleRateHertz}, fileExtension=${fileExtension}`);
       
-      // Configure Google Cloud Speech-to-Text with enhanced settings
-      const speechRequest = {
+      // First, transcribe with English as default to get initial text for Gemini analysis
+      const initialSpeechRequest = {
         audio: {
           content: audioBuffer,
         },
         config: {
           encoding: encoding as any,
           sampleRateHertz: sampleRateHertz,
-          languageCode: languageCode,
-          alternativeLanguageCodes: SUPPORTED_LANGUAGES.filter(lang => lang !== languageCode),
+          languageCode: 'en-IN', // Start with English
+          alternativeLanguageCodes: SUPPORTED_LANGUAGES.filter(lang => lang !== 'en-IN'),
           enableAutomaticPunctuation: true,
           enableWordTimeOffsets: true,
           enableWordConfidence: true,
@@ -120,18 +133,18 @@ export async function POST(request: NextRequest) {
         },
       };
 
-      console.log(`Transcribing with language: ${languageCode}`);
+      console.log('Initial transcription with English for Gemini language detection');
       console.log('Speech request config:', {
-        encoding: speechRequest.config.encoding,
-        sampleRateHertz: speechRequest.config.sampleRateHertz,
-        languageCode: speechRequest.config.languageCode,
-        alternativeLanguageCodes: speechRequest.config.alternativeLanguageCodes
+        encoding: initialSpeechRequest.config.encoding,
+        sampleRateHertz: initialSpeechRequest.config.sampleRateHertz,
+        languageCode: initialSpeechRequest.config.languageCode,
+        alternativeLanguageCodes: initialSpeechRequest.config.alternativeLanguageCodes
       });
 
-      const [response] = await speechClient.recognize(speechRequest);
-      console.log('Google Cloud Speech API response:', response);
+      const [initialResponse] = await speechClient.recognize(initialSpeechRequest);
+      console.log('Initial Google Cloud Speech API response:', initialResponse);
 
-      if (!response.results || response.results.length === 0) {
+      if (!initialResponse.results || initialResponse.results.length === 0) {
         console.log('No speech detected in audio');
         return NextResponse.json(
           { success: false, error: 'No speech detected in audio' },
@@ -139,48 +152,129 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Process results to get full transcript (from Speech to ISL implementation)
-      let fullTranscript = '';
-      let confidence = 0;
+      // Get initial transcript for Gemini language detection
+      let initialTranscript = '';
+      let initialConfidence = 0;
       
-      for (const result of response.results) {
+      for (const result of initialResponse.results) {
         const alternative = result.alternatives?.[0];
         if (!alternative) continue;
         
         const transcript = alternative.transcript;
-        fullTranscript += transcript + ' ';
+        initialTranscript += transcript + ' ';
         
-        // Use the highest confidence score
-        if (alternative.confidence > confidence) {
-          confidence = alternative.confidence;
+        if (alternative.confidence > initialConfidence) {
+          initialConfidence = alternative.confidence;
         }
       }
       
-      const finalTranscript = fullTranscript.trim();
+      const initialText = initialTranscript.trim();
       
-      console.log('Transcription result:', { transcript: finalTranscript, confidence });
-
-      if (!finalTranscript) {
-        console.log('Empty transcript received');
+      if (!initialText) {
+        console.log('Empty initial transcript received');
         return NextResponse.json(
           { success: false, error: 'No speech detected in the audio' },
           { status: 400 }
         );
       }
 
-      // Translate to all other languages
-      console.log(`Transcribed: "${finalTranscript}", translating to all languages...`);
-      const translations = await translateTextToMultipleLanguages(finalTranscript);
-      
-      // Map the translations to the correct language codes
-      const languageTranslations = {
-        'en-IN': translations.en,
-        'hi-IN': translations.hi,
-        'mr-IN': translations.mr,
-        'gu-IN': translations.gu
-      };
+      console.log('Initial transcript for Gemini analysis:', initialText);
 
-      console.log('Translation results:', languageTranslations);
+      // Use Gemini to detect the language from the transcribed text
+      let detectedLanguageCode = 'en-IN'; // Default fallback
+      let detectedLanguageName = 'English';
+      
+      try {
+        // Convert audio to base64 for Gemini
+        const audioBase64 = audioBuffer.toString('base64');
+        const dataUri = `data:audio/${fileExtension};base64,${audioBase64}`;
+        
+        console.log('Using Gemini to detect language from audio...');
+        const geminiResult = await detectAudioLanguage({ audioDataUri: dataUri });
+        const detectedLanguage = geminiResult.language.toLowerCase();
+        
+        console.log('Gemini detected language:', detectedLanguage);
+        
+        // Map Gemini's language detection to our language codes
+        detectedLanguageCode = LANGUAGE_NAME_TO_CODE[detectedLanguage] || 'en-IN';
+        detectedLanguageName = LANGUAGE_MAPPING[detectedLanguageCode] || 'English';
+        
+        console.log('Mapped to language code:', detectedLanguageCode, 'Name:', detectedLanguageName);
+      } catch (error) {
+        console.error('Gemini language detection error:', error);
+        // Fallback to English if Gemini fails
+        detectedLanguageCode = 'en-IN';
+        detectedLanguageName = 'English';
+      }
+
+      // If the detected language is different from English, re-transcribe with the correct language
+      let finalTranscript = initialText;
+      let finalConfidence = initialConfidence;
+      
+      if (detectedLanguageCode !== 'en-IN') {
+        console.log(`Re-transcribing with detected language: ${detectedLanguageCode}`);
+        
+        const finalSpeechRequest = {
+          audio: {
+            content: audioBuffer,
+          },
+          config: {
+            encoding: encoding as any,
+            sampleRateHertz: sampleRateHertz,
+            languageCode: detectedLanguageCode,
+            alternativeLanguageCodes: SUPPORTED_LANGUAGES.filter(lang => lang !== detectedLanguageCode),
+            enableAutomaticPunctuation: true,
+            enableWordTimeOffsets: true,
+            enableWordConfidence: true,
+            model: 'latest_long',
+            useEnhanced: true,
+            diarizationConfig: {
+              enableSpeakerDiarization: false,
+            },
+          },
+        };
+
+        const [finalResponse] = await speechClient.recognize(finalSpeechRequest);
+        
+        if (finalResponse.results && finalResponse.results.length > 0) {
+          let reTranscribedText = '';
+          let reTranscribedConfidence = 0;
+          
+          for (const result of finalResponse.results) {
+            const alternative = result.alternatives?.[0];
+            if (!alternative) continue;
+            
+            const transcript = alternative.transcript;
+            reTranscribedText += transcript + ' ';
+            
+            if (alternative.confidence > reTranscribedConfidence) {
+              reTranscribedConfidence = alternative.confidence;
+            }
+          }
+          
+          const reTranscribedFinal = reTranscribedText.trim();
+          if (reTranscribedFinal) {
+            finalTranscript = reTranscribedFinal;
+            finalConfidence = reTranscribedConfidence;
+            console.log('Re-transcribed text:', finalTranscript);
+          }
+        }
+      }
+
+      // Translate to English if not already English
+      let englishTranslation = finalTranscript;
+      
+      if (detectedLanguageCode !== 'en-IN') {
+        try {
+          console.log(`Translating from ${detectedLanguageName} to English...`);
+          const translations = await translateTextToMultipleLanguages(finalTranscript);
+          englishTranslation = translations.en || finalTranscript;
+          console.log('English translation:', englishTranslation);
+        } catch (error) {
+          console.error('Translation error:', error);
+          englishTranslation = finalTranscript;
+        }
+      }
 
       // Clean up the temporary audio file
       try {
@@ -193,10 +287,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         success: true,
         transcript: finalTranscript,
-        detectedLanguage: languageCode,
-        confidence: confidence,
-        translations: languageTranslations,
-        originalText: languageTranslations[languageCode] || finalTranscript
+        detectedLanguage: detectedLanguageCode,
+        detectedLanguageName: detectedLanguageName,
+        confidence: finalConfidence,
+        englishTranslation: englishTranslation,
+        originalText: finalTranscript
       });
 
     } catch (error) {

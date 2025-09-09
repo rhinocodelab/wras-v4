@@ -8,6 +8,7 @@ import { Mic, MicOff, Loader2, Languages, MessageSquare, X, Globe, Video, Film, 
 import { useToast } from '@/hooks/use-toast';
 import { getIslVideoPlaylist } from '@/app/actions';
 import { generateTextToIslHtml } from '@/lib/utils';
+import { detectAudioLanguage } from '@/ai/speech-language-detection';
 
 const SUPPORTED_LANGUAGES = [
   { code: 'en-IN', name: 'English (India)' },
@@ -284,42 +285,42 @@ export default function AutoSpeechDetectionPage() {
         throw new Error(`Audio file not saved correctly: ${testResult.error || 'File not found'}`);
       }
 
-      // Step 2: Use FastAPI backend for language detection only
-      const detectResponse = await fetch('https://192.168.1.34:5001/detect-language', {
+      // Step 2: Use Gemini for language detection
+      const dataUri = `data:audio/webm;base64,${base64Audio}`;
+      console.log('Using Gemini to detect language from audio...');
+      
+      const geminiResult = await detectAudioLanguage({ audioDataUri: dataUri });
+      const detectedLanguage = geminiResult.language.toLowerCase();
+      console.log('Gemini detected language:', detectedLanguage);
+      
+      // Map Gemini's language detection to our language codes
+      const LANGUAGE_NAME_TO_CODE = {
+        'english': 'en-IN',
+        'hindi': 'hi-IN',
+        'marathi': 'mr-IN',
+        'gujarati': 'gu-IN'
+      };
+      
+      const detectedLanguageCode = LANGUAGE_NAME_TO_CODE[detectedLanguage] || 'en-IN';
+      const LANGUAGE_MAPPING = {
+        'en-IN': 'English',
+        'hi-IN': 'हिंदी (Hindi)',
+        'mr-IN': 'मराठी (Marathi)',
+        'gu-IN': 'ગુજરાતી (Gujarati)'
+      };
+      
+      const detectedLanguageName = LANGUAGE_MAPPING[detectedLanguageCode] || 'English';
+      console.log('Mapped to language code:', detectedLanguageCode, 'Name:', detectedLanguageName);
+
+      // Step 3: Use FastAPI backend for transcription with detected language
+      const transcribeResponse = await fetch('https://192.168.1.34:5001/transcribe-speech', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          audio_path: `/home/sdmsrv/wras-v4/public/temp-audio/${audioId}.webm`
-        }),
-      });
-
-      if (!detectResponse.ok) {
-        const errorText = await detectResponse.text();
-        console.error('Language detection failed:', detectResponse.status, errorText);
-        throw new Error(`Language detection failed: ${detectResponse.status} - ${errorText}`);
-      }
-
-      const detectResult = await detectResponse.json();
-      if (!detectResult.success) {
-        console.error('Language detection result:', detectResult);
-        throw new Error(detectResult.error || 'Language detection failed');
-      }
-
-      const detectedLanguage = detectResult.language_code;
-      const confidence = detectResult.confidence;
-      console.log(`Language detected: ${detectResult.detected_language} (${detectedLanguage}) with confidence: ${confidence}`);
-
-      // Step 3: Use Google Cloud Speech-to-Text for transcription with detected language
-      const transcribeResponse = await fetch('/api/speech-recognition/transcribe-with-language', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          audioId: audioId,
-          languageCode: detectedLanguage
+          audio_path: `/home/sdmsrv/wras-v4/public/temp-audio/${audioId}.webm`,
+          language_code: detectedLanguageCode
         }),
       });
 
@@ -335,19 +336,37 @@ export default function AutoSpeechDetectionPage() {
         throw new Error(transcribeResult.error || 'Transcription failed');
       }
 
+      // Step 4: Get translations using the existing translation API
+      const translateResponse = await fetch('/api/speech-recognition/translate-text', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          text: transcribeResult.transcript,
+          sourceLanguage: detectedLanguageCode,
+          targetLanguages: ['en-IN', 'hi-IN', 'mr-IN', 'gu-IN']
+        }),
+      });
+
+      let translations = {};
+      if (translateResponse.ok) {
+        const translateResult = await translateResponse.json();
+        if (translateResult.success) {
+          translations = translateResult.translations || {};
+        }
+      }
+
       // Update state with results
       setTranscribedText(transcribeResult.transcript);
-      setDetectedLanguage(transcribeResult.detectedLanguage);
-      setTranslations(transcribeResult.translations || {});
+      setDetectedLanguage(detectedLanguageCode);
+      setTranslations(translations);
       setConfidence(transcribeResult.confidence || 0);
       
       // Show success toast with detected language
-      const languageInfo = SUPPORTED_LANGUAGES.find(lang => lang.code === transcribeResult.detectedLanguage);
-      const languageName = languageInfo ? languageInfo.name : transcribeResult.detectedLanguage;
-      
       toast({
         title: 'Speech Recognized & Translated',
-        description: `Detected: ${languageName} • Translated to all languages`
+        description: `Detected: ${detectedLanguageName} • Translated to all languages`
       });
 
     } catch (error) {

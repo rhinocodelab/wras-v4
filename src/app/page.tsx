@@ -16,6 +16,8 @@ import {
   FileAudio,
   Globe,
   Megaphone,
+  Languages,
+  MessageSquare,
 } from 'lucide-react';
 import Link from 'next/link';
 import { Sheet, SheetTrigger, SheetContent } from '@/components/ui/sheet';
@@ -36,6 +38,7 @@ import AudioFileToIslPage from '@/app/audio-file-to-isl/page';
 import AIGeneratedAnnouncementsPage from '@/app/ai-generated-announcements/page';
 import AutoSpeechDetectionPage from '@/app/speech-auto-detection/page';
 import GeneralAnnouncementPage from '@/app/general-announcement/page';
+import SpeechLanguageDetectionPage from '@/app/speech-language-detection/page';
 
 
 export default function HomePage() {
@@ -76,6 +79,8 @@ export default function HomePage() {
         return <AutoSpeechDetectionPage />;
       case 'general-announcement':
         return <GeneralAnnouncementPage />;
+      case 'speech-language-detection':
+        return <SpeechLanguageDetectionPage />;
       default:
         return <Dashboard />;
     }
@@ -170,6 +175,13 @@ export default function HomePage() {
                 >
                   <ClipboardList className="h-4 w-4" />
                   AI Gen ISL Announcement
+                </div>
+                <div
+                  onClick={() => setActiveView('speech-language-detection')}
+                  className={getLinkClassName('speech-language-detection')}
+                >
+                  <MessageSquare className="h-4 w-4" />
+                  Speech Analysis & Translation
                 </div>
               </div>
 
@@ -303,6 +315,13 @@ export default function HomePage() {
                     >
                       <ClipboardList className="h-5 w-5" />
                       AI Gen ISL Announcement
+                    </div>
+                    <div
+                      onClick={() => setActiveView('speech-language-detection')}
+                      className={getMobileLinkClassName('speech-language-detection')}
+                    >
+                      <MessageSquare className="h-5 w-5" />
+                      Speech Analysis & Translation
                     </div>
                   </div>
 

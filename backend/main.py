@@ -7,6 +7,7 @@ import logging
 from typing import Optional
 import torch
 import warnings
+from google.cloud import speech
 
 # Suppress Whisper FP16 warning for CPU usage
 warnings.filterwarnings("ignore", message="FP16 is not supported on CPU; using FP32 instead")
@@ -32,12 +33,22 @@ whisper_model = None
 class AudioPathRequest(BaseModel):
     audio_path: str
 
+class TranscriptionRequest(BaseModel):
+    audio_path: str
+    language_code: str
+
 class LanguageDetectionResponse(BaseModel):
     success: bool
     detected_language: str
     language_code: str
     confidence: float
     transcript: str
+    error: Optional[str] = None
+
+class TranscriptionResponse(BaseModel):
+    success: bool
+    transcript: str
+    confidence: float
     error: Optional[str] = None
 
 # Language mapping from Whisper language codes to our system
@@ -228,6 +239,88 @@ async def transcribe_audio(request: AudioPathRequest):
             language_code="en-IN",
             confidence=0.0,
             transcript="",
+            error=str(e)
+        )
+
+@app.post("/transcribe-speech", response_model=TranscriptionResponse)
+async def transcribe_speech(request: TranscriptionRequest):
+    """
+    Transcribe audio file using Google Cloud Speech-to-Text with specified language
+    
+    Args:
+        request: TranscriptionRequest containing audio path and language code
+        
+    Returns:
+        TranscriptionResponse with transcription results
+    """
+    try:
+        # Check if audio file exists
+        if not os.path.exists(request.audio_path):
+            raise HTTPException(status_code=404, detail=f"Audio file not found: {request.audio_path}")
+        
+        logger.info(f"Transcribing audio file: {request.audio_path} with language: {request.language_code}")
+        
+        # Initialize Google Cloud Speech client
+        client = speech.SpeechClient()
+        
+        # Read audio file
+        with open(request.audio_path, "rb") as f:
+            audio_content = f.read()
+        
+        # Configure audio and recognition settings
+        audio = speech.RecognitionAudio(content=audio_content)
+        config = speech.RecognitionConfig(
+            encoding=speech.RecognitionConfig.AudioEncoding.WEBM_OPUS,
+            sample_rate_hertz=48000,
+            language_code=request.language_code,
+            enable_automatic_punctuation=True,
+            enable_word_time_offsets=True,
+            enable_word_confidence=True,
+            model='latest_long',
+            use_enhanced=True,
+        )
+        
+        # Perform recognition
+        response = client.recognize(config=config, audio=audio)
+        
+        if not response.results:
+            logger.warning("No speech detected in audio")
+            return TranscriptionResponse(
+                success=False,
+                transcript="",
+                confidence=0.0,
+                error="No speech detected in audio"
+            )
+        
+        # Extract transcript and confidence
+        transcript_parts = []
+        total_confidence = 0.0
+        result_count = 0
+        
+        for result in response.results:
+            alternative = result.alternatives[0]
+            transcript_parts.append(alternative.transcript)
+            total_confidence += alternative.confidence
+            result_count += 1
+        
+        final_transcript = " ".join(transcript_parts).strip()
+        average_confidence = total_confidence / result_count if result_count > 0 else 0.0
+        
+        logger.info(f"Transcription completed. Confidence: {average_confidence:.2f}")
+        logger.info(f"Transcript: {final_transcript[:100]}...")
+        
+        return TranscriptionResponse(
+            success=True,
+            transcript=final_transcript,
+            confidence=average_confidence
+        )
+        
+    except Exception as e:
+        logger.error(f"Error transcribing audio: {e}")
+        return TranscriptionResponse(
+            success=False,
+            transcript="",
+            confidence=0.0,
             error=str(e)
         )
 

@@ -22,7 +22,7 @@ import {
 } from '@/components/ui/table';
 import { getIslVideosWithMetadata, VideoMetadata, uploadIslVideo, deleteIslVideo } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, FolderKanban, PlayCircle, FileVideo, Calendar, HardDrive, Clock, Upload, Trash2, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Loader2, FolderKanban, PlayCircle, FileVideo, Calendar, HardDrive, Clock, Upload, Trash2, Plus, ChevronLeft, ChevronRight, Search } from 'lucide-react';
 
 const VIDEOS_PER_PAGE = 10;
 
@@ -38,6 +38,7 @@ export default function IslDatasetPage() {
   const [dragActive, setDragActive] = useState(false);
   const [videoName, setVideoName] = useState('');
   const [videoNameError, setVideoNameError] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -45,11 +46,21 @@ export default function IslDatasetPage() {
     fetchVideos();
   }, []);
 
-  const totalPages = Math.ceil(videos.length / VIDEOS_PER_PAGE);
-  const paginatedVideos = videos.slice(
+  // Filter videos based on search query
+  const filteredVideos = videos.filter(video =>
+    video.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const totalPages = Math.ceil(filteredVideos.length / VIDEOS_PER_PAGE);
+  const paginatedVideos = filteredVideos.slice(
     (currentPage - 1) * VIDEOS_PER_PAGE,
     currentPage * VIDEOS_PER_PAGE
   );
+
+  // Reset to first page when search query changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery]);
 
   const prevPage = () => {
     if (currentPage > 1) {
@@ -291,7 +302,16 @@ export default function IslDatasetPage() {
           </p>
           {videos.length > 0 && (
             <p className="text-sm text-muted-foreground mt-1">
-              {videos.length} video{videos.length !== 1 ? 's' : ''} available • Page {currentPage} of {totalPages}
+              {searchQuery ? (
+                <>
+                  {filteredVideos.length} of {videos.length} video{filteredVideos.length !== 1 ? 's' : ''} found
+                  {filteredVideos.length > 0 && ` • Page ${currentPage} of ${totalPages}`}
+                </>
+              ) : (
+                <>
+                  {videos.length} video{videos.length !== 1 ? 's' : ''} available • Page {currentPage} of {totalPages}
+                </>
+              )}
             </p>
           )}
         </div>
@@ -393,7 +413,22 @@ export default function IslDatasetPage() {
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
           ) : videos.length > 0 ? (
-            <div className="border rounded-lg">
+            <>
+              {/* Search Input */}
+              <div className="mb-4">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    type="text"
+                    placeholder="Search ISL videos by name..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+              </div>
+              
+              <div className="border rounded-lg">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -454,21 +489,42 @@ export default function IslDatasetPage() {
                   ))}
                 </TableBody>
               </Table>
-            </div>
+              </div>
+            </>
           ) : (
             <div className="mt-6 text-center text-muted-foreground border rounded-lg p-12">
-              <p>No videos found in the ISL dataset.</p>
-              <p className="text-sm">
-                Add `.mp4` files to the `public/isl_dataset` directory to see them here.
-              </p>
+              {searchQuery ? (
+                <>
+                  <p>No videos found matching "{searchQuery}".</p>
+                  <p className="text-sm">
+                    Try adjusting your search terms or clear the search to see all videos.
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSearchQuery('')}
+                    className="mt-4"
+                  >
+                    Clear Search
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <p>No videos found in the ISL dataset.</p>
+                  <p className="text-sm">
+                    Add `.mp4` files to the `public/isl_dataset` directory to see them here.
+                  </p>
+                </>
+              )}
             </div>
           )}
         </div>
         
-        {videos.length > 0 && totalPages > 1 && (
+        {filteredVideos.length > 0 && totalPages > 1 && (
           <div className="flex items-center justify-between py-4">
             <div className="text-sm text-muted-foreground">
-              Showing {((currentPage - 1) * VIDEOS_PER_PAGE) + 1} to {Math.min(currentPage * VIDEOS_PER_PAGE, videos.length)} of {videos.length} videos
+              Showing {((currentPage - 1) * VIDEOS_PER_PAGE) + 1} to {Math.min(currentPage * VIDEOS_PER_PAGE, filteredVideos.length)} of {filteredVideos.length} videos
+              {searchQuery && ` (filtered from ${videos.length} total)`}
             </div>
             <div className="flex items-center space-x-2">
               <Button

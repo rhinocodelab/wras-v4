@@ -801,28 +801,19 @@ async function validateVideoFile(videoPath: string): Promise<{ valid: boolean; d
 // Add this function after validateVideoFile
 async function checkAndFixVideoFile(videoPath: string): Promise<{ fixed: boolean; newPath?: string; error?: string }> {
     try {
-        console.log(`Checking and fixing video file: ${videoPath}`);
-        
         // Check if this is the problematic vapi.mp4 file
         if (videoPath.includes('vapi.mp4')) {
-            console.log('Detected vapi.mp4 - applying special handling');
-            
             // Validate the original file first
             const originalValidation = await validateVideoFile(videoPath);
             if (!originalValidation.valid) {
-                console.log('Original vapi.mp4 is invalid, attempting to fix...');
-                
                 // Try to re-encode the vapi.mp4 file to fix any issues
                 const fixedPath = await reencodeVideoFile(videoPath, 'vapi_fixed.mp4');
                 if (fixedPath) {
-                    console.log('Successfully fixed vapi.mp4');
                     return { fixed: true, newPath: fixedPath };
                 } else {
-                    console.log('Failed to fix vapi.mp4, will skip this video');
                     return { fixed: false, error: 'Failed to fix vapi.mp4' };
                 }
             } else {
-                console.log('vapi.mp4 is valid, no fixing needed');
                 return { fixed: false, newPath: videoPath };
             }
         }
@@ -832,7 +823,6 @@ async function checkAndFixVideoFile(videoPath: string): Promise<{ fixed: boolean
         if (validation.valid) {
             return { fixed: false, newPath: videoPath };
         } else {
-            console.log(`Video ${videoPath} is invalid: ${validation.error}`);
             return { fixed: false, error: validation.error };
         }
         
@@ -992,19 +982,15 @@ async function createFinalIslAnnouncementVideo(
         console.log(`Playback speed: ${playbackSpeed}x (PTS multiplier: ${1/playbackSpeed})`);
         
         // Check and fix problematic videos (especially vapi.mp4)
-        console.log('Checking and fixing problematic videos...');
         const processedVideoPaths: string[] = [];
         
         for (const videoPath of videoPaths) {
             const checkResult = await checkAndFixVideoFile(videoPath);
             if (checkResult.fixed && checkResult.newPath) {
-                console.log(`Using fixed version of ${videoPath}: ${checkResult.newPath}`);
                 processedVideoPaths.push(checkResult.newPath);
             } else if (checkResult.newPath) {
-                console.log(`Using original version of ${videoPath}`);
                 processedVideoPaths.push(checkResult.newPath);
             } else {
-                console.warn(`Skipping problematic video: ${videoPath} - ${checkResult.error}`);
                 // Skip problematic videos instead of failing completely
             }
         }
@@ -1014,10 +1000,7 @@ async function createFinalIslAnnouncementVideo(
             return null;
         }
         
-        console.log('Processed video paths:', processedVideoPaths);
-        
         // Videos are already preprocessed during upload, so we can use them directly
-        console.log('Using preprocessed videos directly from upload...');
         const preprocessedVideoPaths = processedVideoPaths;
         
         // Create output directory
