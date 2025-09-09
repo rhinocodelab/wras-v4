@@ -7,8 +7,14 @@ import { translateTextToMultipleLanguages } from '@/app/actions';
 const credentialsPath = join(process.cwd(), 'config', 'isl.json');
 process.env.GOOGLE_APPLICATION_CREDENTIALS = credentialsPath;
 
-// Initialize the Speech client
-const speechClient = new SpeechClient();
+console.log('Setting GOOGLE_APPLICATION_CREDENTIALS to:', credentialsPath);
+console.log('Credentials file exists:', require('fs').existsSync(credentialsPath));
+
+// Initialize the Speech client with explicit credentials
+const speechClient = new SpeechClient({
+  keyFilename: credentialsPath,
+  projectId: 'aipower-467603'
+});
 
 // Supported languages for automatic detection
 const SUPPORTED_LANGUAGES = ['en-IN', 'hi-IN', 'mr-IN', 'gu-IN'];
@@ -23,6 +29,9 @@ const LANGUAGE_MAPPING = {
 
 export async function POST(request: NextRequest) {
   try {
+    console.log('Auto-detect API called');
+    console.log('GOOGLE_APPLICATION_CREDENTIALS:', process.env.GOOGLE_APPLICATION_CREDENTIALS);
+    
     const { audio, mimeType } = await request.json();
 
     if (!audio) {
@@ -70,7 +79,15 @@ export async function POST(request: NextRequest) {
         };
 
         console.log(`Trying with primary language: ${config.primary}`);
-        const [response] = await speechClient.recognize(speechRequest);
+        console.log('Calling Google Cloud Speech API with config:', {
+        encoding: speechRequest.config.encoding,
+        sampleRateHertz: speechRequest.config.sampleRateHertz,
+        languageCode: speechRequest.config.languageCode,
+        alternativeLanguageCodes: speechRequest.config.alternativeLanguageCodes
+      });
+      
+      const [response] = await speechClient.recognize(speechRequest);
+      console.log('Speech API response received');
         
         if (response.results && response.results.length > 0) {
           const result = response.results[0];

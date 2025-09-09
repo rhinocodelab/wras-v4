@@ -312,15 +312,15 @@ export default function AutoSpeechDetectionPage() {
       const detectedLanguageName = LANGUAGE_MAPPING[detectedLanguageCode] || 'English';
       console.log('Mapped to language code:', detectedLanguageCode, 'Name:', detectedLanguageName);
 
-      // Step 3: Use FastAPI backend for transcription with detected language
-      const transcribeResponse = await fetch('https://192.168.1.34:5001/transcribe-speech', {
+      // Step 3: Use Next.js API route for transcription with detected language
+      const transcribeResponse = await fetch('/api/speech-recognition/auto-detect', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          audio_path: `/home/sdmsrv/wras-v4/public/temp-audio/${audioId}.webm`,
-          language_code: detectedLanguageCode
+          audio: base64Audio,
+          mimeType: 'audio/webm;codecs=opus'
         }),
       });
 
@@ -336,37 +336,20 @@ export default function AutoSpeechDetectionPage() {
         throw new Error(transcribeResult.error || 'Transcription failed');
       }
 
-      // Step 4: Get translations using the existing translation API
-      const translateResponse = await fetch('/api/speech-recognition/translate-text', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          text: transcribeResult.transcript,
-          sourceLanguage: detectedLanguageCode,
-          targetLanguages: ['en-IN', 'hi-IN', 'mr-IN', 'gu-IN']
-        }),
-      });
-
-      let translations = {};
-      if (translateResponse.ok) {
-        const translateResult = await translateResponse.json();
-        if (translateResult.success) {
-          translations = translateResult.translations || {};
-        }
-      }
+      // The Next.js API already includes translations, so we can use them directly
+      const translations = transcribeResult.translations || {};
 
       // Update state with results
       setTranscribedText(transcribeResult.transcript);
-      setDetectedLanguage(detectedLanguageCode);
+      setDetectedLanguage(transcribeResult.detectedLanguage);
       setTranslations(translations);
       setConfidence(transcribeResult.confidence || 0);
       
       // Show success toast with detected language
+      const finalDetectedLanguageName = LANGUAGE_MAPPING[transcribeResult.detectedLanguage] || 'English';
       toast({
         title: 'Speech Recognized & Translated',
-        description: `Detected: ${detectedLanguageName} • Translated to all languages`
+        description: `Detected: ${finalDetectedLanguageName} • Translated to all languages`
       });
 
     } catch (error) {

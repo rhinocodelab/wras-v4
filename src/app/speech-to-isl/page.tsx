@@ -6,15 +6,32 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Mic, MicOff, Loader2, Languages, MessageSquare, Video, Speech, Rocket, Film, X } from 'lucide-react';
+import { Mic, MicOff, Loader2, Languages, MessageSquare, Video, Speech, Rocket, Film, X, Globe, Brain, Volume2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { translateSpeechText, getIslVideoPlaylist } from '@/app/actions';
+import { translateSpeechText, getIslVideoPlaylist, translateTextToMultipleLanguages } from '@/app/actions';
+import { detectAudioLanguage } from '@/ai/speech-language-detection';
 
 const LANGUAGE_OPTIONS: { [key: string]: string } = {
-  'en-US': 'English',
+  'en-IN': 'English',
   'hi-IN': 'हिंदी',
   'mr-IN': 'मराठी',
   'gu-IN': 'ગુજરાતી',
+};
+
+// Language mapping for display
+const LANGUAGE_MAPPING = {
+  'en-IN': 'English',
+  'hi-IN': 'हिंदी (Hindi)',
+  'mr-IN': 'मराठी (Marathi)',
+  'gu-IN': 'ગુજરાતી (Gujarati)'
+};
+
+// Language name to code mapping for Gemini detection
+const LANGUAGE_NAME_TO_CODE = {
+  'english': 'en-IN',
+  'hindi': 'hi-IN',
+  'marathi': 'mr-IN',
+  'gujarati': 'gu-IN'
 };
 
 const IslVideoPlayer = ({ playlist, title, onPublish }: { playlist: string[]; title: string; onPublish?: (playbackSpeed: number) => void }) => {
@@ -111,20 +128,32 @@ const IslVideoPlayer = ({ playlist, title, onPublish }: { playlist: string[]; ti
 
 
 export default function SpeechToIslPage() {
-    const [selectedLang, setSelectedLang] = useState('en-US');
+    const [selectedLang, setSelectedLang] = useState('en-IN');
     const [isRecording, setIsRecording] = useState(false);
     const [transcribedText, setTranscribedText] = useState('');
     const [finalTranscribedText, setFinalTranscribedText] = useState('');
     const [translatedText, setTranslatedText] = useState('');
+    const [translations, setTranslations] = useState<{ en: string; mr: string; hi: string; gu: string }>({
+        en: '',
+        mr: '',
+        hi: '',
+        gu: ''
+    });
     const [islPlaylist, setIslPlaylist] = useState<string[]>([]);
     const [isTranslating, setIsTranslating] = useState(false);
     const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
     const [micPermission, setMicPermission] = useState<boolean | null>(null);
+    const [detectedLanguage, setDetectedLanguage] = useState<string>('');
+    const [confidence, setConfidence] = useState<number>(0);
+    const [isProcessing, setIsProcessing] = useState(false);
+    const [useAutoDetection, setUseAutoDetection] = useState(true);
 
     const { toast } = useToast();
     const recognitionRef = useRef<any>(null);
     const recordingRef = useRef(isRecording);
     const isRecognitionActiveRef = useRef(false);
+    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+    const audioChunksRef = useRef<Blob[]>([]);
 
     useEffect(() => {
         recordingRef.current = isRecording;
@@ -150,6 +179,138 @@ export default function SpeechToIslPage() {
         
         checkMicPermission();
     }, [toast]);
+
+    // Enhanced speech analysis workflow with automatic language detection
+    const processAudioWithLanguageDetection = async (audioBlob: Blob) => {
+        try {
+            setIsProcessing(true);
+            
+            // Step 1: Convert audio blob to base64 and save to temporary file
+            const base64Audio = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const result = reader.result as string;
+                    // Remove the data URL prefix to get just the base64 string
+                    const base64 = result.split(',')[1];
+                    resolve(base64);
+                };
+                reader.onerror = () => reject(reader.error);
+                reader.readAsDataURL(audioBlob);
+            });
+            
+            // Save audio file temporarily
+            const saveResponse = await fetch('/api/speech-recognition/save-audio', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    audio: base64Audio,
+                    mimeType: 'audio/webm;codecs=opus'
+                }),
+            });
+
+            if (!saveResponse.ok) {
+                throw new Error(`Failed to save audio file: ${saveResponse.status}`);
+            }
+
+            const saveResult = await saveResponse.json();
+            if (!saveResult.success) {
+                throw new Error(saveResult.error || 'Failed to save audio file');
+            }
+
+            const audioId = saveResult.audioId;
+            console.log(`Audio saved with ID: ${audioId}`);
+
+            // Step 2: Use Gemini for language detection if auto-detection is enabled
+            let detectedLanguageCode = selectedLang;
+            let detectedLanguageName = LANGUAGE_MAPPING[selectedLang] || 'English';
+            
+            if (useAutoDetection) {
+                const dataUri = `data:audio/webm;base64,${base64Audio}`;
+                console.log('Using Gemini to detect language from audio...');
+                
+                const geminiResult = await detectAudioLanguage({ audioDataUri: dataUri });
+                const detectedLanguage = geminiResult.language.toLowerCase();
+                console.log('Gemini detected language:', detectedLanguage);
+                
+                detectedLanguageCode = LANGUAGE_NAME_TO_CODE[detectedLanguage] || 'en-IN';
+                detectedLanguageName = LANGUAGE_MAPPING[detectedLanguageCode] || 'English';
+                console.log('Mapped to language code:', detectedLanguageCode, 'Name:', detectedLanguageName);
+            }
+
+            // Step 3: Use Google Cloud Speech-to-Text API for transcription
+            const transcribeResponse = await fetch('/api/speech-recognition/auto-detect', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    audio: base64Audio,
+                    mimeType: 'audio/webm;codecs=opus'
+                }),
+            });
+
+            if (!transcribeResponse.ok) {
+                const errorText = await transcribeResponse.text();
+                console.error('Transcription failed:', transcribeResponse.status, errorText);
+                throw new Error(`Transcription failed: ${transcribeResponse.status} - ${errorText}`);
+            }
+
+            const transcribeResult = await transcribeResponse.json();
+            if (!transcribeResult.success) {
+                console.error('Transcription result:', transcribeResult);
+                throw new Error(transcribeResult.error || 'Transcription failed');
+            }
+
+            // Step 4: Get translations using the existing translation API
+            const translateResponse = await fetch('/api/speech-recognition/translate-text', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    text: transcribeResult.transcript,
+                    sourceLanguage: transcribeResult.detectedLanguage,
+                    targetLanguages: ['en-IN', 'hi-IN', 'mr-IN', 'gu-IN']
+                }),
+            });
+
+            let translations = {};
+            if (translateResponse.ok) {
+                const translateResult = await translateResponse.json();
+                if (translateResult.success) {
+                    translations = translateResult.translations || {};
+                }
+            }
+
+            // Update state with results
+            setTranscribedText(transcribeResult.transcript);
+            setDetectedLanguage(transcribeResult.detectedLanguage);
+            setTranslations(translations);
+            setConfidence(transcribeResult.confidence || 0);
+            
+            // Set the English translation for ISL video generation
+            const englishText = translations['en-IN'] || transcribeResult.transcript;
+            setTranslatedText(englishText);
+            
+            // Show success toast with detected language
+            toast({
+                title: 'Speech Recognized & Translated',
+                description: `Detected: ${detectedLanguageName} • Translated to all languages`
+            });
+
+        } catch (error) {
+            console.error('Error in speech recognition workflow:', error);
+            toast({
+                variant: 'destructive',
+                title: 'Recognition Failed',
+                description: 'Failed to recognize speech. Please try speaking more clearly.'
+            });
+        } finally {
+            setIsProcessing(false);
+        }
+    };
 
      const handleTranslateClick = useCallback(async () => {
         const textToTranslate = finalTranscribedText;
@@ -184,11 +345,14 @@ export default function SpeechToIslPage() {
     }, [finalTranscribedText, selectedLang, toast]);
 
     const handleGenerateVideoClick = useCallback(async () => {
-        if (!translatedText.trim()) return;
+        const englishText = translations.en || translatedText;
+        if (!englishText.trim()) return;
         
         setIsGeneratingVideo(true);
         try {
-            const result = await getIslVideoPlaylist(translatedText);
+            // Add spaces between digits for better ISL representation
+            const processedText = englishText.replace(/(\d)/g, ' $1 ');
+            const result = await getIslVideoPlaylist(processedText);
             const playlist = result.playlist;
             setIslPlaylist(playlist);
             
@@ -226,7 +390,7 @@ export default function SpeechToIslPage() {
         } finally {
             setIsGeneratingVideo(false);
         }
-    }, [translatedText, toast]);
+    }, [translations.en, translatedText, toast]);
 
     useEffect(() => {
         // @ts-ignore
@@ -327,12 +491,9 @@ export default function SpeechToIslPage() {
     const handleMicClick = async () => {
         if (isRecording) {
             // Stop recording
-            try {
-                recognitionRef.current?.stop();
-            } catch (e) {
-                console.log('Recognition already stopped');
+            if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+                mediaRecorderRef.current.stop();
             }
-            isRecognitionActiveRef.current = false;
             setIsRecording(false);
         } else {
             // Start recording
@@ -349,27 +510,64 @@ export default function SpeechToIslPage() {
             setTranscribedText('');
             setFinalTranscribedText('');
             setTranslatedText('');
+            setTranslations({ en: '', mr: '', hi: '', gu: '' });
+            setDetectedLanguage('');
+            setConfidence(0);
             setIslPlaylist([]);
             
-            // Check microphone availability before starting
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                stream.getTracks().forEach(track => track.stop()); // Stop the test stream
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        sampleRate: 48000
+                    }
+                });
                 
-                setIsRecording(true);
-                try {
-                    isRecognitionActiveRef.current = true;
-                    recognitionRef.current?.start();
-                } catch (e) {
-                    console.error("Could not start recognition:", e);
-                    isRecognitionActiveRef.current = false;
-                    setIsRecording(false);
+                // Create MediaRecorder
+                const mediaRecorder = new MediaRecorder(stream, {
+                    mimeType: 'audio/webm;codecs=opus'
+                });
+                
+                mediaRecorderRef.current = mediaRecorder;
+                audioChunksRef.current = [];
+                
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        audioChunksRef.current.push(event.data);
+                    }
+                };
+                
+                mediaRecorder.onstop = async () => {
+                    // Create audio blob from chunks
+                    const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm;codecs=opus' });
+                    
+                    // Stop all tracks
+                    stream.getTracks().forEach(track => track.stop());
+                    
+                    // Process the audio with language detection
+                    await processAudioWithLanguageDetection(audioBlob);
+                };
+                
+                mediaRecorder.onerror = (event) => {
+                    console.error('MediaRecorder error:', event);
                     toast({
                         variant: 'destructive',
-                        title: 'Recording Failed',
-                        description: 'Could not start speech recognition. Please try again.'
+                        title: 'Recording Error',
+                        description: 'An error occurred while recording audio.'
                     });
-                }
+                    setIsRecording(false);
+                };
+                
+                // Start recording
+                mediaRecorder.start();
+                setIsRecording(true);
+                
+                toast({
+                    title: 'Recording Started',
+                    description: 'Speak clearly into your microphone...'
+                });
+                
             } catch (error) {
                 console.error('Microphone not available:', error);
                 toast({
@@ -382,9 +580,10 @@ export default function SpeechToIslPage() {
     };
     
     const handlePublish = (selectedPlaybackSpeed: number = 1.0) => {
-        if (!translatedText && !transcribedText) return;
+        const englishText = translations.en || translatedText;
+        if (!englishText && !transcribedText) return;
 
-        const tickerText = [transcribedText, translatedText].filter(Boolean).join(' &nbsp; | &nbsp; ');
+        const tickerText = [transcribedText, englishText].filter(Boolean).join(' &nbsp; | &nbsp; ');
         
         // Convert relative video paths to absolute URLs
         const baseUrl = window.location.origin;
@@ -463,11 +662,15 @@ export default function SpeechToIslPage() {
         setTranscribedText('');
         setFinalTranscribedText('');
         setTranslatedText('');
+        setTranslations({ en: '', mr: '', hi: '', gu: '' });
+        setDetectedLanguage('');
+        setConfidence(0);
         setIslPlaylist([]);
     }
 
     const handleClearTranslation = () => {
         setTranslatedText('');
+        setTranslations({ en: '', mr: '', hi: '', gu: '' });
         setIslPlaylist([]);
     }
 
@@ -479,59 +682,102 @@ export default function SpeechToIslPage() {
                     Speech to ISL Converter
                 </h1>
                 <p className="text-muted-foreground">
-                    Select a language, speak, and see the ISL translation in real-time.
+                    Speak in any supported language and get automatic transcription, translation to English, and ISL video generation.
                 </p>
             </div>
 
             <Card className="mt-6">
-                <CardContent className="p-4 flex flex-col sm:flex-row items-center gap-4">
-                    <div className="w-full sm:w-auto">
-                        <label className="text-sm font-medium">Spoken Language</label>
-                        <Select value={selectedLang} onValueChange={setSelectedLang} disabled={isRecording}>
-                            <SelectTrigger className="w-full sm:w-[180px]">
-                                <SelectValue placeholder="Select a language" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {Object.entries(LANGUAGE_OPTIONS).map(([code, name]) => (
-                                    <SelectItem key={code} value={code}>{name}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                <CardContent className="p-4 flex flex-col gap-4">
+                    <div className="flex flex-col sm:flex-row items-center gap-4">
+                        <div className="w-full sm:w-auto">
+                            <label className="text-sm font-medium">Spoken Language</label>
+                            <Select value={selectedLang} onValueChange={setSelectedLang} disabled={isRecording || isProcessing}>
+                                <SelectTrigger className="w-full sm:w-[180px]">
+                                    <SelectValue placeholder="Select a language" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {Object.entries(LANGUAGE_OPTIONS).map(([code, name]) => (
+                                        <SelectItem key={code} value={code}>{name}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                            <input
+                                type="checkbox"
+                                id="auto-detect"
+                                checked={useAutoDetection}
+                                onChange={(e) => setUseAutoDetection(e.target.checked)}
+                                disabled={isRecording || isProcessing}
+                                className="rounded"
+                            />
+                            <label htmlFor="auto-detect" className="text-sm font-medium flex items-center gap-1">
+                                <Brain className="h-4 w-4" />
+                                Auto-detect language
+                            </label>
+                        </div>
+
+                        <div className="flex-grow" />
+
+                        <Button 
+                            onClick={handleMicClick} 
+                            size="lg" 
+                            className="rounded-full h-16 w-16 flex items-center justify-center"
+                            variant={isRecording ? "destructive" : "default"}
+                            disabled={isProcessing}
+                        >
+                            {isProcessing ? (
+                                <Loader2 className="h-8 w-8 animate-spin" />
+                            ) : isRecording ? (
+                                <MicOff className="h-8 w-8" />
+                            ) : (
+                                <svg className="w-8 h-8 text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+                                    <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9v3a5.006 5.006 0 0 1-5 5h-4a5.006 5.006 0 0 1-5-5V9m7 9v3m-3 0h6M11 3h2a3 3 0 0 1 3 3v5a3 3 0 0 1-3 3h-2a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3Z"/>
+                                </svg>
+                            )}
+                        </Button>
+                        <p className="text-sm text-muted-foreground w-28 text-center">
+                            {isProcessing ? 'Processing...' : isRecording ? 'Recording...' : 'Tap to speak'}
+                        </p>
+
+                        <div className="flex-grow" />
                     </div>
 
-                    <div className="flex-grow" />
-
-                    <Button 
-                        onClick={handleMicClick} 
-                        size="lg" 
-                        className="rounded-full h-16 w-16 flex items-center justify-center"
-                        variant={isRecording ? "destructive" : "default"}
-                    >
-                        {isRecording ? (
-                            <MicOff className="h-8 w-8" />
-                        ) : (
-                            <svg className="w-8 h-8 text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
-                                <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9v3a5.006 5.006 0 0 1-5 5h-4a5.006 5.006 0 0 1-5-5V9m7 9v3m-3 0h6M11 3h2a3 3 0 0 1 3 3v5a3 3 0 0 1-3 3h-2a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3Z"/>
-                            </svg>
-                        )}
-                    </Button>
-                    <p className="text-sm text-muted-foreground w-28 text-center">
-                        {isRecording ? 'Recording...' : 'Tap to speak'}
-                    </p>
-
-                    <div className="flex-grow" />
+                    {/* Detection Results */}
+                    {(detectedLanguage || confidence > 0) && (
+                        <div className="flex items-center gap-4 p-3 bg-muted rounded-lg">
+                            {detectedLanguage && (
+                                <div className="flex items-center gap-2">
+                                    <Globe className="h-4 w-4 text-primary" />
+                                    <span className="text-sm font-medium">Detected:</span>
+                                    <span className="text-sm">{LANGUAGE_MAPPING[detectedLanguage] || detectedLanguage}</span>
+                                </div>
+                            )}
+                            {confidence > 0 && (
+                                <div className="flex items-center gap-2">
+                                    <Volume2 className="h-4 w-4 text-primary" />
+                                    <span className="text-sm font-medium">Confidence:</span>
+                                    <span className="text-sm">{Math.round(confidence * 100)}%</span>
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </CardContent>
             </Card>
 
-            <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-6 flex-grow">
-                <div className="md:col-span-2 grid grid-rows-2 gap-6">
+            <div className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6 flex-grow">
+                <div className="lg:col-span-2 grid grid-rows-2 gap-6">
                     <Card className="flex flex-col row-span-1">
                         <CardHeader className="flex flex-row items-center justify-between">
                             <div className="space-y-1.5">
                                 <CardTitle className="flex items-center gap-2">
                                 <MessageSquare className="h-5 w-5 text-primary" />
-                                Transcribed Text
+                                Original Text
                                 </CardTitle>
+                                <CardDescription>
+                                    Your spoken words will appear here.
+                                </CardDescription>
                             </div>
                             <Button variant="ghost" size="sm" onClick={handleClearTranscription} disabled={!transcribedText}>
                                 Clear
@@ -558,23 +804,23 @@ export default function SpeechToIslPage() {
                                     This text will be used to generate the ISL video.
                                 </CardDescription>
                             </div>
-                            <Button variant="ghost" size="sm" onClick={handleClearTranslation} disabled={!translatedText}>
+                            <Button variant="ghost" size="sm" onClick={handleClearTranslation} disabled={!translations.en}>
                                 Clear
                             </Button>
                         </CardHeader>
                         <CardContent className="flex-grow flex flex-col gap-4">
                             <Textarea
-                                value={translatedText}
+                                value={translations.en || ''}
                                 readOnly
                                 placeholder="The English translation will appear here..."
                                 className="h-full resize-none"
                             />
                             <div className="flex gap-2">
-                                <Button onClick={handleTranslateClick} disabled={isTranslating || !finalTranscribedText || isRecording}>
+                                <Button onClick={handleTranslateClick} disabled={isTranslating || !finalTranscribedText || isRecording || isProcessing}>
                                     {isTranslating ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Languages className="mr-2 h-4 w-4"/>}
-                                    {isTranslating ? "Translating..." : "Translate"}
+                                    {isTranslating ? "Translating..." : "Manual Translate"}
                                 </Button>
-                                 <Button onClick={handleGenerateVideoClick} disabled={isGeneratingVideo || !translatedText}>
+                                 <Button onClick={handleGenerateVideoClick} disabled={isGeneratingVideo || !translations.en}>
                                     {isGeneratingVideo ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Film className="mr-2 h-4 w-4" />}
                                     {isGeneratingVideo ? "Generating..." : "Generate ISL Video"}
                                  </Button>

@@ -7,8 +7,11 @@ import { readFile, unlink } from 'fs/promises';
 const credentialsPath = join(process.cwd(), 'config', 'isl.json');
 process.env.GOOGLE_APPLICATION_CREDENTIALS = credentialsPath;
 
-// Initialize the Speech client
-const speechClient = new SpeechClient();
+// Initialize the Speech client with explicit credentials
+const speechClient = new SpeechClient({
+  keyFilename: credentialsPath,
+  projectId: 'aipower-467603'
+});
 
 // Supported languages for automatic detection
 const SUPPORTED_LANGUAGES = ['en-IN', 'hi-IN', 'mr-IN', 'gu-IN'];
