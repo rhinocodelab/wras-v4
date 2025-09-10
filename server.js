@@ -4,17 +4,42 @@ const next = require('next');
 const fs = require('fs');
 const path = require('path');
 
+// Load server configuration
+let serverConfig;
+try {
+  const configPath = path.join(__dirname, 'config', 'server.json');
+  const configData = fs.readFileSync(configPath, 'utf8');
+  serverConfig = JSON.parse(configData);
+} catch (error) {
+  console.error('Error loading server config:', error);
+  // Fallback configuration
+  serverConfig = {
+    server: {
+      ip: '27.107.17.167',
+      port: 5001,
+      protocol: 'https',
+      domain: '27.107.17.167'
+    },
+    ssl: {
+      enabled: true,
+      certPath: './certs/cert.pem',
+      keyPath: './certs/private.key'
+    },
+    environment: 'production'
+  };
+}
+
 const dev = process.env.NODE_ENV !== 'production';
-const hostname = '0.0.0.0';
-const port = process.env.PORT || 9002;
+const hostname = serverConfig.server.ip;
+const port = process.env.PORT || serverConfig.server.frontendPort || 9002;
 
 // when using middleware `hostname` and `port` must be provided below
 const app = next({ dev, hostname, port });
 const handle = app.getRequestHandler();
 
-// SSL certificate paths
-const certPath = path.join(__dirname, 'certs', 'server.crt');
-const keyPath = path.join(__dirname, 'certs', 'server.key');
+// SSL certificate paths from configuration
+const certPath = path.join(__dirname, serverConfig.ssl.certPath);
+const keyPath = path.join(__dirname, serverConfig.ssl.keyPath);
 
 // Check if certificates exist
 const certExists = fs.existsSync(certPath);

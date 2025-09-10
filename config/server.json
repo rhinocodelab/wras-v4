@@ -1,0 +1,15 @@
+{
+  "server": {
+    "ip": "192.168.1.34",
+    "port": 5001,
+    "frontendPort": 9002,
+    "protocol": "https",
+    "domain": "192.168.1.34"
+  },
+  "ssl": {
+    "enabled": true,
+    "certPath": "./certs/cert.pem",
+    "keyPath": "./certs/private.key"
+  },
+  "environment": "production"
+}

@@ -11,7 +11,12 @@
     "start": "next start",
     "start:https": "NODE_ENV=production node server.js",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "generate-ssl": "./scripts/generate-ssl-cert.sh",
+    "setup-ssl": "npm run generate-ssl && echo 'SSL certificates generated successfully!'",
+    "update-ip": "node scripts/update-config.js",
+    "setup-server": "./scripts/generate-ssl-cert.sh",
+    "cleanup-certs": "./scripts/cleanup-certificates.sh"
   },
   "dependencies": {
     "@genkit-ai/firebase": "^1.18.0",
