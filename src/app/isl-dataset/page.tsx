@@ -98,7 +98,7 @@ export default function IslDatasetPage() {
       if (videoMetadata.length === 0) {
         toast({
           title: 'No Videos Found',
-          description: 'The ISL dataset directory is empty or does not exist.',
+          description: 'The ISL dataset directory is empty or does not exist. Try syncing with the database.',
         });
       }
     } catch (error) {
@@ -108,6 +108,36 @@ export default function IslDatasetPage() {
         description: 'Failed to fetch ISL dataset videos.',
       });
       console.error('Failed to fetch ISL videos:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const syncWithDatabase = async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch('/api/isl-dataset/sync', {
+        method: 'POST',
+      });
+      
+      if (response.ok) {
+        toast({
+          title: 'Sync Successful',
+          description: 'ISL dataset synchronized with database successfully.',
+        });
+        // Refresh the videos list
+        await fetchVideos();
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Sync failed');
+      }
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Sync Failed',
+        description: error instanceof Error ? error.message : 'Failed to sync ISL dataset.',
+      });
+      console.error('Failed to sync ISL dataset:', error);
     } finally {
       setIsLoading(false);
     }
@@ -315,12 +345,26 @@ export default function IslDatasetPage() {
             </p>
           )}
         </div>
-        <Dialog open={isUploadModalOpen} onOpenChange={setIsUploadModalOpen}>
-          <DialogTrigger asChild>
-            <Button className="bg-[#287fb8] text-white hover:bg-[#287fb8]/90">
-              Upload Video
-            </Button>
-          </DialogTrigger>
+        <div className="flex gap-2">
+          <Button 
+            onClick={syncWithDatabase} 
+            disabled={isLoading}
+            variant="outline"
+            className="flex items-center gap-2"
+          >
+            {isLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Search className="h-4 w-4" />
+            )}
+            Sync Database
+          </Button>
+          <Dialog open={isUploadModalOpen} onOpenChange={setIsUploadModalOpen}>
+            <DialogTrigger asChild>
+              <Button className="bg-[#287fb8] text-white hover:bg-[#287fb8]/90">
+                Upload Video
+              </Button>
+            </DialogTrigger>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle>Upload ISL Video</DialogTitle>
@@ -404,6 +448,7 @@ export default function IslDatasetPage() {
             </div>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>

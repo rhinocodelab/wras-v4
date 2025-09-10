@@ -137,6 +137,20 @@ export async function getDb() {
     )
   `);
 
+  // ISL Dataset Videos Table
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS isl_dataset_videos (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      file_path TEXT NOT NULL UNIQUE,
+      name TEXT NOT NULL,
+      size INTEGER NOT NULL,
+      duration REAL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      status TEXT DEFAULT 'active'
+    )
+  `);
+
   // Text to ISL Projects Table
   await db.exec(`
     CREATE TABLE IF NOT EXISTS text_to_isl_projects (
@@ -596,70 +610,127 @@ export async function getIslVideos(): Promise<string[]> {
   }
 }
 
+// Fast database-based function to get ISL videos
 export async function getIslVideosWithMetadata(): Promise<VideoMetadata[]> {
+  const db = await getDb();
+  try {
+    const videos = await db.all(`
+      SELECT file_path, name, size, duration 
+      FROM isl_dataset_videos 
+      WHERE status = 'active' 
+      ORDER BY name ASC
+    `);
+    
+    return videos.map(video => ({
+      path: video.file_path,
+      name: video.name,
+      size: video.size,
+      duration: video.duration
+    }));
+  } catch (error) {
+    console.error('Failed to fetch ISL videos from database:', error);
+    return [];
+  } finally {
+    await db.close();
+  }
+}
+
+// Function to sync ISL dataset directory with database (run periodically or on demand)
+export async function syncIslDatasetWithDatabase(): Promise<void> {
   const baseDir = path.join(process.cwd(), 'public');
   const videoDir = path.join(baseDir, 'isl_dataset');
+  
+  const db = await getDb();
+  
+  try {
+    // Check if directory exists
+    await fs.access(videoDir);
+    
+    // Function to get video duration using ffprobe
+    const getVideoDuration = async (filePath: string): Promise<number | undefined> => {
+      try {
+        const { exec } = await import('child_process');
+        const { promisify } = await import('util');
+        const execAsync = promisify(exec);
+        
+        const command = `ffprobe -v quiet -show_entries format=duration -of csv=p=0 "${filePath}"`;
+        const { stdout } = await execAsync(command);
+        const duration = parseFloat(stdout.trim());
+        return isNaN(duration) ? undefined : duration;
+      } catch (error) {
+        console.warn(`Could not get duration for ${filePath}:`, error);
+        return undefined;
+      }
+    };
 
-  // Function to get video duration using ffprobe
-  const getVideoDuration = async (filePath: string): Promise<number | undefined> => {
-    try {
-      const { exec } = await import('child_process');
-      const { promisify } = await import('util');
-      const execAsync = promisify(exec);
-      
-      const command = `ffprobe -v quiet -show_entries format=duration -of csv=p=0 "${filePath}"`;
-      const { stdout } = await execAsync(command);
-      const duration = parseFloat(stdout.trim());
-      return isNaN(duration) ? undefined : duration;
-    } catch (error) {
-      console.warn(`Could not get duration for ${filePath}:`, error);
-      return undefined;
-    }
-  };
-
-  const findVideosWithMetadata = async (dir: string): Promise<VideoMetadata[]> => {
-    let videoFiles: VideoMetadata[] = [];
-    try {
-      const entries = await fs.readdir(dir, { withFileTypes: true });
-      for (const entry of entries) {
-        const fullPath = path.join(dir, entry.name);
-        if (entry.isDirectory()) {
-          videoFiles = videoFiles.concat(await findVideosWithMetadata(fullPath));
-        } else if (entry.isFile() && entry.name.endsWith('.mp4')) {
-          try {
-            // Get file stats for size
-            const stats = await fs.stat(fullPath);
-            
-            // Get video duration
-            const duration = await getVideoDuration(fullPath);
-            
-            // Return the path relative to the 'public' directory
-            const relativePath = path.relative(baseDir, fullPath);
-            const webPath = `/${relativePath.replace(/\\/g, '/')}`;
-            
-            videoFiles.push({
-              path: webPath,
-              name: entry.name.replace('.mp4', '').replace(/_/g, ' '),
-              size: stats.size,
-              duration: duration
-            });
-          } catch (error) {
-            console.warn(`Could not get metadata for ${fullPath}:`, error);
+    const syncVideosInDirectory = async (dir: string): Promise<void> => {
+      try {
+        const entries = await fs.readdir(dir, { withFileTypes: true });
+        for (const entry of entries) {
+          const fullPath = path.join(dir, entry.name);
+          if (entry.isDirectory()) {
+            await syncVideosInDirectory(fullPath);
+          } else if (entry.isFile() && entry.name.endsWith('.mp4')) {
+            try {
+              // Get file stats for size
+              const stats = await fs.stat(fullPath);
+              
+              // Return the path relative to the 'public' directory
+              const relativePath = path.relative(baseDir, fullPath);
+              const webPath = `/${relativePath.replace(/\\/g, '/')}`;
+              
+              const videoName = entry.name.replace('.mp4', '').replace(/_/g, ' ');
+              
+              // Check if video already exists in database
+              const existingVideo = await db.get(
+                'SELECT id FROM isl_dataset_videos WHERE file_path = ?',
+                [webPath]
+              );
+              
+              if (existingVideo) {
+                // Update existing record if file size changed
+                await db.run(
+                  'UPDATE isl_dataset_videos SET size = ?, updated_at = CURRENT_TIMESTAMP WHERE file_path = ?',
+                  [stats.size, webPath]
+                );
+              } else {
+                // Get video duration for new files
+                const duration = await getVideoDuration(fullPath);
+                
+                // Insert new video record
+                await db.run(
+                  'INSERT INTO isl_dataset_videos (file_path, name, size, duration) VALUES (?, ?, ?, ?)',
+                  [webPath, videoName, stats.size, duration]
+                );
+              }
+            } catch (error) {
+              console.warn(`Could not sync video ${fullPath}:`, error);
+            }
           }
         }
+      } catch (error) {
+        console.warn(`Could not read directory ${dir}:`, error);
       }
-    } catch (error) {
-       console.warn(`Could not read directory ${dir}:`, error);
-    }
-    return videoFiles;
-  };
+    };
 
-  try {
-    await fs.access(videoDir);
-    return await findVideosWithMetadata(videoDir);
+    await syncVideosInDirectory(videoDir);
+    
+    // Mark videos as inactive if they no longer exist in filesystem
+    const allDbVideos = await db.all('SELECT file_path FROM isl_dataset_videos WHERE status = "active"');
+    for (const dbVideo of allDbVideos) {
+      const fullPath = path.join(baseDir, dbVideo.file_path.substring(1)); // Remove leading slash
+      try {
+        await fs.access(fullPath);
+      } catch {
+        // File doesn't exist, mark as inactive
+        await db.run('UPDATE isl_dataset_videos SET status = "inactive" WHERE file_path = ?', [dbVideo.file_path]);
+      }
+    }
+    
   } catch (error) {
     console.warn('ISL dataset directory does not exist or is not accessible.');
-    return [];
+  } finally {
+    await db.close();
   }
 }
 
@@ -3192,6 +3263,38 @@ export async function uploadIslVideo(formData: FormData): Promise<{ success: boo
         const relativePath = `/isl_dataset/${sanitizedName}/${fileName}`;
         console.log(`ISL video uploaded and preprocessed successfully: ${relativePath}`);
         
+        // Add video to database for fast loading
+        try {
+            const db = await getDb();
+            try {
+                // Get video duration using ffprobe
+                let duration: number | undefined;
+                try {
+                    const { exec } = await import('child_process');
+                    const { promisify } = await import('util');
+                    const execAsync = promisify(exec);
+                    
+                    const command = `ffprobe -v quiet -show_entries format=duration -of csv=p=0 "${finalFilePath}"`;
+                    const { stdout } = await execAsync(command);
+                    duration = parseFloat(stdout.trim());
+                    if (isNaN(duration)) duration = undefined;
+                } catch (error) {
+                    console.warn(`Could not get duration for ${finalFilePath}:`, error);
+                }
+                
+                await db.run(
+                    'INSERT OR REPLACE INTO isl_dataset_videos (file_path, name, size, duration, status) VALUES (?, ?, ?, ?, "active")',
+                    [relativePath, sanitizedName.replace(/_/g, ' '), file.size, duration]
+                );
+                console.log(`Video added to database: ${relativePath}`);
+            } finally {
+                await db.close();
+            }
+        } catch (dbError) {
+            console.warn('Failed to add video to database:', dbError);
+            // Don't fail the upload if database update fails
+        }
+        
         return { 
             success: true, 
             message: 'Video uploaded and preprocessed successfully!',
@@ -3221,6 +3324,23 @@ export async function deleteIslVideo(videoPath: string): Promise<{ success: bool
         
         // Delete the file
         await fs.unlink(fullPath);
+        
+        // Remove from database
+        try {
+            const db = await getDb();
+            try {
+                await db.run(
+                    'UPDATE isl_dataset_videos SET status = "inactive" WHERE file_path = ?',
+                    [videoPath]
+                );
+                console.log(`Video removed from database: ${videoPath}`);
+            } finally {
+                await db.close();
+            }
+        } catch (dbError) {
+            console.warn('Failed to remove video from database:', dbError);
+            // Don't fail the deletion if database update fails
+        }
         
         console.log(`ISL video deleted: ${videoPath}`);
         return { 
