@@ -39,6 +39,7 @@ import AIGeneratedAnnouncementsPage from '@/app/ai-generated-announcements/page'
 import AutoSpeechDetectionPage from '@/app/speech-auto-detection/page';
 import GeneralAnnouncementPage from '@/app/general-announcement/page';
 import SpeechLanguageDetectionPage from '@/app/speech-language-detection/page';
+import AudioFileAnalysisPage from '@/app/audio-file-analysis/page';
 
 
 export default function HomePage() {
@@ -81,6 +82,8 @@ export default function HomePage() {
         return <GeneralAnnouncementPage />;
       case 'speech-language-detection':
         return <SpeechLanguageDetectionPage />;
+      case 'audio-file-analysis':
+        return <AudioFileAnalysisPage />;
       default:
         return <Dashboard />;
     }
@@ -182,6 +185,13 @@ export default function HomePage() {
                 >
                   <MessageSquare className="h-4 w-4" />
                   Speech Analysis & Translation
+                </div>
+                <div
+                  onClick={() => setActiveView('audio-file-analysis')}
+                  className={getLinkClassName('audio-file-analysis')}
+                >
+                  <FileAudio className="h-4 w-4" />
+                  Audio File Analysis & Translation
                 </div>
               </div>
 
@@ -322,6 +332,13 @@ export default function HomePage() {
                     >
                       <MessageSquare className="h-5 w-5" />
                       Speech Analysis & Translation
+                    </div>
+                    <div
+                      onClick={() => setActiveView('audio-file-analysis')}
+                      className={getMobileLinkClassName('audio-file-analysis')}
+                    >
+                      <FileAudio className="h-5 w-5" />
+                      Audio File Analysis & Translation
                     </div>
                   </div>
 

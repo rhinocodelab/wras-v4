@@ -43,94 +43,385 @@ export async function POST(request: NextRequest) {
 
     // Convert base64 audio to buffer
     const audioBuffer = Buffer.from(audio, 'base64');
+    
+    // Validate audio buffer
+    if (audioBuffer.length === 0) {
+      return NextResponse.json(
+        { success: false, error: 'Audio data is empty or invalid' },
+        { status: 400 }
+      );
+    }
+    
+    console.log('Audio buffer size:', audioBuffer.length, 'bytes');
+    
+    // Additional audio validation
+    if (audioBuffer.length < 1000) {
+      console.warn(`Audio buffer is very small: ${audioBuffer.length} bytes. This might indicate a problem with the audio file.`);
+    }
 
-    // Try multiple API calls with different primary languages to get the best detection
-    const languageConfigs = [
-      { primary: 'hi-IN', alternatives: ['en-IN', 'mr-IN', 'gu-IN'] },
-      { primary: 'en-IN', alternatives: ['hi-IN', 'mr-IN', 'gu-IN'] },
-      { primary: 'mr-IN', alternatives: ['en-IN', 'hi-IN', 'gu-IN'] },
-      { primary: 'gu-IN', alternatives: ['en-IN', 'hi-IN', 'mr-IN'] }
-    ];
+    // Determine encoding and sample rate based on mimeType and audio file analysis
+    let encoding: string;
+    let sampleRateHertz: number;
 
-    let bestResponse = null;
-    let bestScore = 0;
-    let bestLanguage = 'en-IN';
-
-    for (const config of languageConfigs) {
+    if (mimeType.includes('webm') || mimeType.includes('opus')) {
+      encoding = 'WEBM_OPUS';
+      sampleRateHertz = 48000;
+    } else if (mimeType.includes('mp3') || mimeType.includes('mpeg')) {
+      encoding = 'MP3';
+      sampleRateHertz = 44100;
+    } else if (mimeType.includes('wav')) {
+      encoding = 'LINEAR16';
+      // For WAV files, try to read the sample rate from the header
       try {
-        const speechRequest = {
+        // WAV header format: bytes 24-27 contain sample rate
+        if (audioBuffer.length >= 28) {
+          const sampleRate = audioBuffer.readUInt32LE(24);
+          console.log(`WAV file sample rate from header: ${sampleRate}`);
+          
+          // Validate the sample rate (common values: 8000, 11025, 16000, 22050, 44100, 48000)
+          const commonSampleRates = [8000, 11025, 16000, 22050, 44100, 48000];
+          if (commonSampleRates.includes(sampleRate)) {
+            sampleRateHertz = sampleRate;
+          } else {
+            console.warn(`Unusual sample rate detected: ${sampleRate}, using 44100 as fallback`);
+            sampleRateHertz = 44100;
+          }
+        } else {
+          sampleRateHertz = 44100; // Default fallback
+        }
+      } catch (error) {
+        console.warn('Could not read WAV header, using default sample rate:', error);
+        sampleRateHertz = 44100;
+      }
+    } else if (mimeType.includes('aac') || mimeType.includes('m4a')) {
+      // AAC/M4A files - try MP3 encoding as fallback since AAC might not be directly supported
+      encoding = 'MP3'; // Use MP3 encoding as AAC is often compatible
+      sampleRateHertz = 44100;
+      console.log('AAC/M4A file detected, using MP3 encoding as fallback');
+    } else if (mimeType.includes('flac')) {
+      encoding = 'FLAC';
+      sampleRateHertz = 44100;
+      console.log('FLAC file detected');
+    } else if (mimeType.includes('ogg')) {
+      encoding = 'OGG_OPUS';
+      sampleRateHertz = 48000;
+      console.log('OGG file detected');
+    } else {
+      // Default fallback - omit encoding for auto-detection
+      encoding = null; // Will omit encoding field entirely
+      sampleRateHertz = 44100;
+      console.log(`Unknown audio format: ${mimeType}, omitting encoding for auto-detection`);
+    }
+
+    console.log(`Detected audio format: ${mimeType}, using encoding: ${encoding}, sample rate: ${sampleRateHertz}`);
+    console.log(`Audio buffer length: ${audioBuffer.length} bytes`);
+    console.log(`Audio duration estimate: ${(audioBuffer.length / (sampleRateHertz * 2)).toFixed(2)} seconds (assuming 16-bit mono)`);
+
+    // Get the detected language from the frontend
+    const detectedLanguageFromFrontend = request.headers.get('x-detected-language');
+    console.log('Detected language from frontend:', detectedLanguageFromFrontend);
+
+    // Map language names to language codes
+    const LANGUAGE_NAME_TO_CODE = {
+      'english': 'en-IN',
+      'hindi': 'hi-IN',
+      'marathi': 'mr-IN',
+      'gujarati': 'gu-IN',
+      'bengali': 'bn-IN',
+      'tamil': 'ta-IN',
+      'telugu': 'te-IN',
+      'kannada': 'kn-IN',
+      'malayalam': 'ml-IN',
+      'punjabi': 'pa-IN',
+      'urdu': 'ur-IN'
+    };
+
+    const detectedLanguageCode = detectedLanguageFromFrontend ? 
+      LANGUAGE_NAME_TO_CODE[detectedLanguageFromFrontend] || 'en-IN' : 'en-IN';
+
+    console.log('Using language code for transcription:', detectedLanguageCode);
+
+    // Use ONLY the detected language for transcription
+    let bestResponse = null;
+    let bestLanguage = detectedLanguageCode;
+    let hasAnySuccess = false;
+
+    try {
+      const speechRequest: any = {
+        audio: {
+          content: audioBuffer,
+        },
+        config: {
+          languageCode: detectedLanguageCode, // Use ONLY the detected language
+          enableAutomaticPunctuation: true,
+          enableWordTimeOffsets: true,
+          enableWordConfidence: true,
+          // Use default model for Indian languages (latest_long not supported for gu-IN)
+          useEnhanced: true,
+          diarizationConfig: {
+            enableSpeakerDiarization: false,
+          },
+        },
+      };
+
+      // Add encoding only if specified, otherwise let API auto-detect
+      if (encoding !== null) {
+        speechRequest.config.encoding = encoding;
+      }
+      // Always add sampleRateHertz as it's required by the API
+      speechRequest.config.sampleRateHertz = sampleRateHertz;
+
+      console.log('Calling Google Cloud Speech API with detected language:', {
+        encoding: speechRequest.config.encoding,
+        sampleRateHertz: speechRequest.config.sampleRateHertz,
+        languageCode: speechRequest.config.languageCode,
+        detectedLanguage: detectedLanguageFromFrontend
+      });
+      console.log('Full speech request config:', JSON.stringify(speechRequest.config, null, 2));
+      
+      const [response] = await speechClient.recognize(speechRequest);
+      console.log('Speech API response received for detected language');
+        
+      if (response.results && response.results.length > 0) {
+        const result = response.results[0];
+        const alternative = result.alternatives?.[0];
+        
+        if (alternative && alternative.transcript.trim()) {
+          console.log(`Successfully transcribed in ${detectedLanguageCode}: "${alternative.transcript}"`);
+          bestResponse = response;
+          bestLanguage = detectedLanguageCode;
+          hasAnySuccess = true;
+        }
+      }
+    } catch (error) {
+      console.log(`Error with detected language ${detectedLanguageCode}:`, error);
+      console.log('Error details:', {
+        message: error.message,
+        code: error.code,
+        details: error.details
+      });
+      
+      // If the detected language is not supported, try English as fallback
+      if (detectedLanguageCode !== 'en-IN' && error.message.includes('not supported')) {
+        console.log(`Detected language ${detectedLanguageCode} not supported, trying English fallback...`);
+        try {
+          const englishRequest: any = {
+            audio: {
+              content: audioBuffer,
+            },
+            config: {
+              languageCode: 'en-IN',
+              enableAutomaticPunctuation: true,
+              enableWordTimeOffsets: true,
+              enableWordConfidence: true,
+              useEnhanced: true,
+              diarizationConfig: {
+                enableSpeakerDiarization: false,
+              },
+            },
+          };
+
+          // Add encoding only if specified, otherwise let API auto-detect
+          if (encoding !== null) {
+            englishRequest.config.encoding = encoding;
+          }
+          // Always add sampleRateHertz as it's required by the API
+          englishRequest.config.sampleRateHertz = sampleRateHertz;
+
+          console.log('Trying English fallback for unsupported language');
+          const [englishResponse] = await speechClient.recognize(englishRequest);
+          
+          if (englishResponse.results && englishResponse.results.length > 0) {
+            const result = englishResponse.results[0];
+            const alternative = result.alternatives?.[0];
+            
+            if (alternative && alternative.transcript.trim()) {
+              console.log(`English fallback succeeded: "${alternative.transcript}"`);
+              bestResponse = englishResponse;
+              bestLanguage = 'en-IN'; // Mark as English since we used English API
+              hasAnySuccess = true;
+            }
+          }
+        } catch (englishError) {
+          console.log('English fallback also failed:', englishError);
+        }
+      }
+    }
+
+    // If the detected language failed, try multiple fallback approaches
+    if (!hasAnySuccess) {
+      console.log('Detected language transcription failed, trying multiple fallback approaches...');
+      
+      // Try 1: Simple fallback with detected language
+      try {
+        const simpleRequest: any = {
           audio: {
             content: audioBuffer,
           },
           config: {
-            encoding: 'WEBM_OPUS' as const,
-            sampleRateHertz: 48000,
-            languageCode: config.primary,
-            alternativeLanguageCodes: config.alternatives,
+            languageCode: detectedLanguageCode,
             enableAutomaticPunctuation: true,
-            enableWordTimeOffsets: true,
-            enableWordConfidence: true,
-            model: 'latest_long',
-            useEnhanced: true,
-            diarizationConfig: {
-              enableSpeakerDiarization: false,
-            },
           },
         };
 
-        console.log(`Trying with primary language: ${config.primary}`);
-        console.log('Calling Google Cloud Speech API with config:', {
-        encoding: speechRequest.config.encoding,
-        sampleRateHertz: speechRequest.config.sampleRateHertz,
-        languageCode: speechRequest.config.languageCode,
-        alternativeLanguageCodes: speechRequest.config.alternativeLanguageCodes
-      });
-      
-      const [response] = await speechClient.recognize(speechRequest);
-      console.log('Speech API response received');
+        // Add encoding only if specified, otherwise let API auto-detect
+        if (encoding !== null) {
+          simpleRequest.config.encoding = encoding;
+        }
+        // Always add sampleRateHertz as it's required by the API
+        simpleRequest.config.sampleRateHertz = sampleRateHertz;
+
+        console.log('Trying simple fallback configuration with detected language:', {
+          encoding: simpleRequest.config.encoding,
+          sampleRateHertz: simpleRequest.config.sampleRateHertz,
+          languageCode: simpleRequest.config.languageCode,
+          detectedLanguage: detectedLanguageCode
+        });
+
+        const [fallbackResponse] = await speechClient.recognize(simpleRequest);
         
-        if (response.results && response.results.length > 0) {
-          const result = response.results[0];
-          const alternative = result.alternatives?.[0];
+        if (fallbackResponse.results && fallbackResponse.results.length > 0) {
+          console.log('Simple fallback succeeded with detected language');
+          bestResponse = fallbackResponse;
+          bestLanguage = detectedLanguageCode;
+          hasAnySuccess = true;
+        }
+      } catch (fallbackError) {
+        console.log('Simple fallback also failed:', fallbackError);
+      }
+
+      // Try 2: English fallback if detected language is not English
+      if (!hasAnySuccess && detectedLanguageCode !== 'en-IN') {
+        try {
+          console.log('Trying English fallback for better compatibility...');
+          const englishRequest: any = {
+            audio: {
+              content: audioBuffer,
+            },
+            config: {
+              languageCode: 'en-IN',
+              enableAutomaticPunctuation: true,
+            },
+          };
+
+          // Add encoding only if specified, otherwise let API auto-detect
+          if (encoding !== null) {
+            englishRequest.config.encoding = encoding;
+          }
+          // Always add sampleRateHertz as it's required by the API
+          englishRequest.config.sampleRateHertz = sampleRateHertz;
+
+          console.log('Trying English fallback configuration:', {
+            encoding: englishRequest.config.encoding,
+            sampleRateHertz: englishRequest.config.sampleRateHertz,
+            languageCode: englishRequest.config.languageCode
+          });
+
+          const [englishFallbackResponse] = await speechClient.recognize(englishRequest);
           
-          if (alternative) {
-            const transcript = alternative.transcript;
-            const confidence = alternative.confidence || 0;
-            const detectedLang = detectLanguageFromTranscript(transcript);
+          if (englishFallbackResponse.results && englishFallbackResponse.results.length > 0) {
+            console.log('English fallback succeeded');
+            bestResponse = englishFallbackResponse;
+            bestLanguage = 'en-IN';
+            hasAnySuccess = true;
+          }
+        } catch (englishFallbackError) {
+          console.log('English fallback also failed:', englishFallbackError);
+        }
+      }
+
+      // Try 3: Minimal configuration (no encoding, no sample rate)
+      if (!hasAnySuccess) {
+        try {
+          console.log('Trying minimal configuration (no encoding/sample rate)...');
+          const minimalRequest: any = {
+            audio: {
+              content: audioBuffer,
+            },
+            config: {
+              languageCode: detectedLanguageCode,
+            },
+          };
+
+          console.log('Trying minimal configuration:', {
+            languageCode: minimalRequest.config.languageCode,
+            noEncoding: true,
+            noSampleRate: true
+          });
+
+          const [minimalResponse] = await speechClient.recognize(minimalRequest);
+          
+          if (minimalResponse.results && minimalResponse.results.length > 0) {
+            console.log('Minimal configuration succeeded');
+            bestResponse = minimalResponse;
+            bestLanguage = detectedLanguageCode;
+            hasAnySuccess = true;
+          }
+        } catch (minimalError) {
+          console.log('Minimal configuration also failed:', minimalError);
+        }
+      }
+
+      // Try 4: Try with different encodings for AAC files
+      if (!hasAnySuccess && (mimeType.includes('aac') || mimeType.includes('m4a'))) {
+        const aacEncodings = ['FLAC', 'LINEAR16'];
+        for (const aacEncoding of aacEncodings) {
+          try {
+            console.log(`Trying AAC with ${aacEncoding} encoding...`);
+            const aacRequest: any = {
+              audio: {
+                content: audioBuffer,
+              },
+              config: {
+                languageCode: detectedLanguageCode,
+                encoding: aacEncoding,
+                sampleRateHertz: 44100,
+                enableAutomaticPunctuation: true,
+              },
+            };
+
+            console.log(`Trying AAC with ${aacEncoding}:`, {
+              encoding: aacRequest.config.encoding,
+              sampleRateHertz: aacRequest.config.sampleRateHertz,
+              languageCode: aacRequest.config.languageCode
+            });
+
+            const [aacResponse] = await speechClient.recognize(aacRequest);
             
-            console.log(`Primary: ${config.primary}, Transcript: "${transcript}", Detected: ${detectedLang}, Confidence: ${confidence}`);
-            
-            // Score based on confidence and language match
-            let score = confidence;
-            
-            // Boost score if detected language matches primary language
-            if (detectedLang === config.primary) {
-              score += 0.2;
+            if (aacResponse.results && aacResponse.results.length > 0) {
+              console.log(`AAC with ${aacEncoding} encoding succeeded`);
+              bestResponse = aacResponse;
+              bestLanguage = detectedLanguageCode;
+              hasAnySuccess = true;
+              break;
             }
-            
-            // Boost score for non-English detection
-            if (detectedLang !== 'en-IN') {
-              score += 0.1;
-            }
-            
-            if (score > bestScore) {
-              bestScore = score;
-              bestResponse = response;
-              bestLanguage = detectedLang;
-              console.log(`New best result: ${detectedLang} with score ${score}`);
-            }
+          } catch (aacError) {
+            console.log(`AAC with ${aacEncoding} encoding failed:`, aacError.message);
           }
         }
-      } catch (error) {
-        console.log(`Error with primary language ${config.primary}:`, error);
       }
     }
 
     const response = bestResponse;
     
-    if (!response.results || response.results.length === 0) {
+    if (!hasAnySuccess || !response || !response.results || response.results.length === 0) {
+      console.error('Speech recognition failed for all language configurations');
+      console.error('Audio buffer length:', audioBuffer.length);
+      console.error('Audio format:', mimeType);
+      console.error('Encoding:', encoding);
+      console.error('Sample rate:', sampleRateHertz);
+      
       return NextResponse.json(
-        { success: false, error: 'No speech detected in the audio' },
+        { 
+          success: false, 
+          error: 'No speech detected in the audio. Please check: 1) Audio file is not corrupted, 2) Audio contains clear speech, 3) Audio format is supported (MP3, WAV, AAC)',
+          debug: {
+            audioLength: audioBuffer.length,
+            mimeType: mimeType,
+            encoding: encoding,
+            sampleRate: sampleRateHertz
+          }
+        },
         { status: 400 }
       );
     }

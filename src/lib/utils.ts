@@ -86,10 +86,23 @@ export function generateTextToIslHtml(
         const tickerElement = document.getElementById('ticker');
         
         // Get the current origin (for blob URLs, we need to use the parent window's origin)
-        const origin = window.opener ? window.opener.location.origin : (window.location.origin || 'http://localhost:9002');
+        let origin = 'http://localhost:9002'; // Default fallback
+        
+        if (window.opener && window.opener.location && window.opener.location.origin) {
+            origin = window.opener.location.origin;
+        } else if (window.location && window.location.origin) {
+            origin = window.location.origin;
+        } else if (window.parent && window.parent.location && window.parent.location.origin) {
+            origin = window.parent.location.origin;
+        }
+        
+        console.log('Detected origin:', origin);
         
         const videoPlaylist = ${videoSources}.map(path => origin + path);
         const audioPlaylist = ${audioSources}.map(path => origin + path);
+        
+        console.log('Video sources from server:', ${videoSources});
+        console.log('Final video playlist:', videoPlaylist);
         const announcementData = ${announcementDataJson};
         const hasAudioFiles = ${hasAudioFiles};
         let currentSpeed = ${playbackSpeed};
@@ -178,20 +191,54 @@ export function generateTextToIslHtml(
         }` : ''}
         
         function startPlayback() {
+            console.log('Starting playback with videoPlaylist:', videoPlaylist);
+            console.log('Origin:', origin);
+            
             if (videoPlaylist.length > 0) {
-                console.log('Loading video:', videoPlaylist[0]);
-                videoElement.src = videoPlaylist[0];
+                const videoUrl = videoPlaylist[0];
+                console.log('Loading video:', videoUrl);
+                console.log('Full video URL:', videoUrl);
+                
+                videoElement.src = videoUrl;
                 videoElement.loop = true;
                 videoElement.playbackRate = currentSpeed;
                 
-                // Add error handling for video loading
+                // Add comprehensive error handling for video loading
                 videoElement.onerror = (e) => {
                     console.error('Video loading error:', e);
                     console.error('Video src:', videoElement.src);
+                    console.error('Video networkState:', videoElement.networkState);
+                    console.error('Video readyState:', videoElement.readyState);
+                    
+                    // Try to provide more specific error information
+                    if (videoElement.error) {
+                        console.error('Video error details:', {
+                            code: videoElement.error.code,
+                            message: videoElement.error.message
+                        });
+                    }
+                    
+                    // Try to fetch the video to check if it exists
+                    fetch(videoElement.src, { method: 'HEAD' })
+                        .then(response => {
+                            console.log('Video fetch test - Status:', response.status);
+                            console.log('Video fetch test - Headers:', response.headers);
+                        })
+                        .catch(fetchError => {
+                            console.error('Video fetch test failed:', fetchError);
+                        });
                 };
                 
                 videoElement.onloadstart = () => {
                     console.log('Video loading started');
+                };
+                
+                videoElement.onloadedmetadata = () => {
+                    console.log('Video metadata loaded');
+                };
+                
+                videoElement.onloadeddata = () => {
+                    console.log('Video data loaded');
                 };
                 
                 videoElement.oncanplay = () => {
@@ -199,8 +246,13 @@ export function generateTextToIslHtml(
                     videoElement.play().catch(e => console.error("Video play error:", e));
                 };
                 
+                videoElement.oncanplaythrough = () => {
+                    console.log('Video can play through');
+                };
+                
                 // Ensure video restarts when it ends (backup for loop)
                 videoElement.addEventListener('ended', () => {
+                    console.log('Video ended, restarting...');
                     videoElement.currentTime = 0;
                     videoElement.play().catch(e => console.error("Video restart error:", e));
                 });
