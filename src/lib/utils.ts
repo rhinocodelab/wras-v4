@@ -66,7 +66,6 @@ export function generateTextToIslHtml(
     <div class="main-content">
         ${hideInfoHeader ? '' : `
         <div class="info-header">
-            <h1>ISL Announcement</h1>
             <p>${originalText}</p>
         </div>`}
         <div class="video-container">
@@ -134,9 +133,9 @@ export function generateTextToIslHtml(
             
             // Function to calculate optimal font size based on text length
             function calculateOptimalFontSize(text) {
-                const baseFontSize = 2.2; // Base font size in em
+                const baseFontSize = 2.8; // Increased base font size in em
                 const maxLength = 50; // Maximum comfortable length
-                const minFontSize = 1.2; // Minimum font size
+                const minFontSize = 1.5; // Increased minimum font size
                 
                 if (text.length <= maxLength) {
                     return baseFontSize + 'em';
