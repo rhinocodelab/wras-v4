@@ -15,10 +15,10 @@ export function generateTextToIslHtml(
     hideInfoHeader: boolean = false
 ): string {
     // Create language-specific data for synchronization
-    // If no audio files provided, show all translations without audio
+    // Show all languages that have text, regardless of audio file availability
     const hasAudioFiles = Object.values(audioFiles).some(path => path);
     const announcementData = Object.entries(translations)
-        .filter(([lang, text]) => text && (hasAudioFiles ? audioFiles[lang as keyof typeof audioFiles] : true))
+        .filter(([lang, text]) => text && text.trim() !== '')
         .map(([lang, text]) => ({
             language_code: lang,
             text: text,
@@ -54,16 +54,12 @@ export function generateTextToIslHtml(
         .route { display: flex; align-items: center; justify-content: center; gap: 20px; }
         .video-container { width: 80%; max-width: 960px; aspect-ratio: 16 / 9; background-color: #111; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
         video { width: 100%; height: 100%; object-fit: cover; }
-        .ticker-wrap { position: fixed; bottom: 0; left: 0; width: 100%; background-color: #1a1a1a; padding: 20px; overflow: hidden; min-height: 80px; }
-        .ticker { display: flex; align-items: center; font-size: 2.2em; line-height: 1.4; white-space: nowrap; margin: 0; animation: scroll 30s linear infinite; }
-        .ticker-item { margin-right: 100px; }
-        .ticker-separator { margin: 0 50px; color: #666; font-size: 1.5em; }
+        .ticker-wrap { position: fixed; bottom: 0; left: 0; width: 100%; background-color: #1a1a1a; padding: 20px; overflow: hidden; min-height: 80px; display: flex; justify-content: center; align-items: center; }
+        .ticker { display: flex; align-items: center; justify-content: center; line-height: 1.4; white-space: nowrap; margin: 0; text-align: center; width: 100%; }
+        .ticker-item { margin-right: 50px; }
+        .ticker-separator { margin: 0 30px; color: #666; font-size: 1.5em; }
         .ticker.fade { opacity: 0.3; }
         .ticker.active { opacity: 1; }
-        @keyframes scroll {
-            0% { transform: translateX(100%); }
-            100% { transform: translateX(-100%); }
-        }
     </style>
 </head>
 <body>
@@ -120,21 +116,62 @@ export function generateTextToIslHtml(
         introAudio.src = introAudioPath;
         introAudio.volume = 1.0;` : ''}
 
+        let currentTickerIndex = 0;
+        let tickerInterval = null;
+        
         function createScrollingTicker() {
             if (!tickerElement || announcementData.length === 0) return;
             
-            // Create ticker content with all languages and separators
-            const tickerContent = announcementData
-                .filter(announcement => announcement.text && announcement.text.trim())
-                .map(announcement => {
-                    return \`<span class="ticker-item">\${announcement.text}</span>\`;
-                })
-                .join('<span class="ticker-separator">•</span>');
+            // Clear any existing interval
+            if (tickerInterval) {
+                clearInterval(tickerInterval);
+            }
             
-            // Set the ticker content
-            tickerElement.innerHTML = tickerContent;
-            tickerElement.classList.add('active');
-            tickerElement.classList.remove('fade');
+            // Filter announcements that have text
+            const validAnnouncements = announcementData.filter(announcement => announcement.text && announcement.text.trim());
+            
+            if (validAnnouncements.length === 0) return;
+            
+            // Function to calculate optimal font size based on text length
+            function calculateOptimalFontSize(text) {
+                const baseFontSize = 2.2; // Base font size in em
+                const maxLength = 50; // Maximum comfortable length
+                const minFontSize = 1.2; // Minimum font size
+                
+                if (text.length <= maxLength) {
+                    return baseFontSize + 'em';
+                } else {
+                    // Reduce font size for longer text
+                    const reductionFactor = Math.min(text.length / maxLength, 2);
+                    const newFontSize = Math.max(baseFontSize / reductionFactor, minFontSize);
+                    return newFontSize + 'em';
+                }
+            }
+            
+            // Function to update ticker with current language
+            function updateTickerToCurrentLanguage() {
+                if (validAnnouncements.length === 0) return;
+                
+                const currentAnnouncement = validAnnouncements[currentTickerIndex];
+                const text = currentAnnouncement.text;
+                
+                // Calculate optimal font size
+                const fontSize = calculateOptimalFontSize(text);
+                
+                // Set the ticker content with dynamic font size
+                tickerElement.innerHTML = \`<span class="ticker-item" style="font-size: \${fontSize};">\${text}</span>\`;
+                tickerElement.classList.add('active');
+                tickerElement.classList.remove('fade');
+                
+                // Move to next language
+                currentTickerIndex = (currentTickerIndex + 1) % validAnnouncements.length;
+            }
+            
+            // Start with first language
+            updateTickerToCurrentLanguage();
+            
+            // Set up interval to cycle through languages every 8 seconds
+            tickerInterval = setInterval(updateTickerToCurrentLanguage, 8000);
         }
         
         function getLanguageName(languageCode) {
@@ -148,7 +185,7 @@ export function generateTextToIslHtml(
         }
         
         function updateTickerText(languageCode) {
-            // For backward compatibility, but now we use createScrollingTicker
+            // For backward compatibility, restart the cycling ticker
             createScrollingTicker();
         }
         
@@ -292,6 +329,13 @@ export function generateTextToIslHtml(
         
         // Use a more reliable event to start playback
         window.addEventListener('load', startPlayback, { once: true });
+        
+        // Cleanup function to clear intervals when page is unloaded
+        window.addEventListener('beforeunload', () => {
+            if (tickerInterval) {
+                clearInterval(tickerInterval);
+            }
+        });
         
         // Add keyboard shortcuts for speed control
         document.addEventListener('keydown', (e) => {
