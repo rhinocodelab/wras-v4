@@ -22,9 +22,9 @@ import {
 } from '@/components/ui/table';
 import { getIslVideosWithMetadata, VideoMetadata, uploadIslVideo, deleteIslVideo } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, FolderKanban, PlayCircle, FileVideo, Calendar, HardDrive, Clock, Upload, Trash2, Plus, ChevronLeft, ChevronRight, Search, Scissors } from 'lucide-react';
+import { Loader2, FolderKanban, PlayCircle, FileVideo, Calendar, HardDrive, Clock, Upload, Trash2, Plus, ChevronLeft, ChevronRight, Search, Scissors, Info } from 'lucide-react';
 
-const VIDEOS_PER_PAGE = 10;
+const VIDEOS_PER_PAGE = 42; // 6 rows × 7 columns
 
 export default function IslDatasetPage() {
   const [videos, setVideos] = useState<VideoMetadata[]>([]);
@@ -1048,67 +1048,66 @@ export default function IslDatasetPage() {
                 </div>
               </div>
               
-              <div className="border rounded-lg">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[400px]">Video Name</TableHead>
-                    <TableHead className="w-[150px]">Duration</TableHead>
-                    <TableHead className="w-[150px]">Size</TableHead>
-                    <TableHead className="w-[200px] text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {paginatedVideos.map((video) => (
-                    <TableRow key={video.path} className="hover:bg-muted/50">
-                      <TableCell className="font-medium">
-                        <div className="flex items-center gap-2">
-                          <FileVideo className="h-4 w-4 text-primary" />
-                          <span className="capitalize">{video.name}</span>
+              {/* Card Grid Layout */}
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-7 gap-3">
+                {paginatedVideos.map((video) => (
+                  <div
+                    key={video.path}
+                    className="relative group bg-white border border-gray-200 rounded-lg p-3 hover:shadow-lg transition-all duration-200 cursor-pointer"
+                  >
+                    {/* Card Content */}
+                    <div className="flex flex-col items-center text-center">
+                      <FileVideo className="h-6 w-6 text-primary mb-2" />
+                      <h3 className="font-medium text-sm text-gray-900 capitalize truncate w-full">
+                        {video.name}
+                      </h3>
+                      <Info className="h-4 w-4 text-gray-400 mt-1" />
+                    </div>
+
+                    {/* Hover Overlay */}
+                    <div className="absolute inset-0 bg-black bg-opacity-80 rounded-lg flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                      <div className="text-white text-center space-y-2">
+                        {/* Duration */}
+                        <div className="flex items-center gap-1 text-xs">
+                          <Clock className="h-3 w-3" />
+                          <span>
+                            {video.duration ? formatDuration(video.duration) : 'Unknown'}
+                          </span>
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        {video.duration ? (
-                          <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                            <Clock className="h-3 w-3" />
-                            <span>{formatDuration(video.duration)}</span>
-                          </div>
-                        ) : (
-                          <span className="text-sm text-muted-foreground">Unknown</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                        
+                        {/* Size */}
+                        <div className="flex items-center gap-1 text-xs">
                           <HardDrive className="h-3 w-3" />
                           <span>{(video.size / 1024 / 1024).toFixed(1)} MB</span>
                         </div>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleDeleteVideo(video.path, video.name)}
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+
+                        {/* Action Buttons */}
+                        <div className="flex items-center gap-2 pt-1">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handlePlayClick(video.path);
+                            }}
+                            className="p-1.5 bg-green-600 hover:bg-green-700 rounded-full transition-colors"
+                            title="Play Video"
                           >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                          <DialogTrigger asChild>
-                            <Button 
-                              size="sm" 
-                              onClick={() => handlePlayClick(video.path)}
-                              className="bg-[#0F9D58] text-white hover:bg-[#0F9D58]/90 border-[#0F9D58]"
-                            >
-                              <PlayCircle className="h-4 w-4 mr-1" />
-                              Play
-                            </Button>
-                          </DialogTrigger>
+                            <PlayCircle className="h-4 w-4 text-white" />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteVideo(video.path, video.name);
+                            }}
+                            className="p-1.5 bg-red-600 hover:bg-red-700 rounded-full transition-colors"
+                            title="Delete Video"
+                          >
+                            <Trash2 className="h-4 w-4 text-white" />
+                          </button>
                         </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </>
           ) : (
