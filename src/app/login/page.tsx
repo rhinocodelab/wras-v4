@@ -16,45 +16,92 @@ export default async function LoginPage() {
         <link rel="icon" type="image/svg+xml" href="/train-icon.svg" />
       </Head>
       <div className="flex min-h-screen w-full flex-col bg-gray-100">
-      <main className="flex flex-1 items-center justify-center p-4">
-        <div className="w-full max-w-3xl overflow-hidden rounded-lg bg-white shadow-2xl">
-          <div className="flex flex-col md:flex-row">
-            <div className="flex w-full flex-col items-center justify-center bg-primary p-8 text-white md:w-1/2 relative">
-              <div className="absolute top-4 left-1/2 transform -translate-x-1/2">
-                <div className="text-4xl font-bold text-white/20 select-none">
-                  POC DEMO
+        <main className="flex flex-1 items-center justify-center p-4">
+          <div className="w-full max-w-4xl overflow-hidden rounded-lg bg-white shadow-2xl">
+            <div className="flex flex-col lg:flex-row">
+              {/* Left Side - Information and Logo */}
+              <div className="flex w-full flex-col items-center justify-center bg-gradient-to-br from-primary to-primary/80 p-8 text-white lg:w-1/2 relative overflow-hidden">
+                {/* Background Pattern */}
+                <div className="absolute inset-0 opacity-10">
+                  <div className="absolute top-10 left-10 w-32 h-32 border border-white/20 rounded-full"></div>
+                  <div className="absolute top-32 right-16 w-24 h-24 border border-white/20 rounded-full"></div>
+                  <div className="absolute bottom-20 left-20 w-40 h-40 border border-white/20 rounded-full"></div>
+                  <div className="absolute bottom-32 right-10 w-28 h-28 border border-white/20 rounded-full"></div>
+                </div>
+                
+                {/* POC Demo Badge */}
+                <div className="absolute top-4 left-4">
+                  <div className="px-4 py-2 bg-white/20 rounded-full text-sm font-semibold backdrop-blur-sm">
+                    POC DEMO
+                  </div>
+                </div>
+                
+                {/* Main Content */}
+                <div className="text-center max-w-md z-10">
+                  <p className="mb-6 text-2xl leading-relaxed text-blue-100">
+                    Western Railway Announcement System for Deaf and Hard of Hearing
+                  </p>
+                  
+                  <div className="mx-auto mb-6 h-1 w-16 bg-white/30 rounded-full"></div>
+                  
+                  <p className="text-base text-blue-100 leading-relaxed">
+                    Empowering accessibility through
+                    <br />
+                    AI-powered visual railway announcements
+                  </p>
+                  
+                  {/* Features List */}
+                  <div className="mt-8 text-left">
+                    <h3 className="text-lg font-semibold mb-4 text-left">Key Features</h3>
+                    <ul className="space-y-2 text-sm text-blue-100">
+                      <li className="flex items-center">
+                        <div className="w-2 h-2 bg-white/60 rounded-full mr-3"></div>
+                        Real-time ISL video generation
+                      </li>
+                      <li className="flex items-center">
+                        <div className="w-2 h-2 bg-white/60 rounded-full mr-3"></div>
+                        Multi-language support
+                      </li>
+                      <li className="flex items-center">
+                        <div className="w-2 h-2 bg-white/60 rounded-full mr-3"></div>
+                        AI-powered avatar models
+                      </li>
+                      <li className="flex items-center">
+                        <div className="w-2 h-2 bg-white/60 rounded-full mr-3"></div>
+                        Accessible railway announcements
+                      </li>
+                    </ul>
+                  </div>
                 </div>
               </div>
-              <div className="text-center">
-                <div className="mb-3 inline-flex h-12 w-12 items-center justify-center rounded-full bg-white/20">
-                  <TramFront className="h-6 w-6 text-white" />
+              
+              {/* Right Side - Login Form */}
+              <div className="flex w-full flex-col justify-center p-8 lg:w-1/2">
+                {/* Logo */}
+                <div className="mb-6 text-center">
+                  <img 
+                    src="/logo.png" 
+                    alt="Logo" 
+                    className="mx-auto"
+                  />
                 </div>
-                <h1 className="mb-2 text-xl font-bold">WRAS-DHH</h1>
-                <p className="mb-3 text-sm leading-relaxed text-blue-100">
-                  Western Railway Announcement System
-                  <br />
-                  for Deaf and Hard of Hearing
-                </p>
-                <div className="mx-auto mb-3 h-0.5 w-12 bg-white/30"></div>
-                <p className="text-sm text-blue-100">
-                  Empowering accessibility through
-                  <br />
-                  AI-powered visual railway announcements
-                </p>
+                
+                <div className="mb-8">
+                  <h2 className="text-2xl font-bold text-gray-900 mb-2">Welcome Back</h2>
+                  <p className="text-gray-600">Please sign in to your account</p>
+                </div>
+                
+                <LoginForm />
               </div>
-            </div>
-            <div className="flex w-full flex-col justify-center p-8 md:w-1/2">
-              <LoginForm />
             </div>
           </div>
-        </div>
-      </main>
-      <footer className="border-t bg-white p-3">
-        <div className="text-center text-base font-bold text-muted-foreground">
-          Designed and Developed by <a href="https://www.sundynegroup.com/" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground underline">Sundyne Technologies</a> © 2025
-        </div>
-      </footer>
-    </div>
+        </main>
+        <footer className="border-t bg-white p-3">
+          <div className="text-center text-base font-bold text-muted-foreground">
+            Designed and Developed by <a href="https://www.sundynegroup.com/" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground underline">Sundyne Technologies</a> © 2025
+          </div>
+        </footer>
+      </div>
     </>
   );
 }

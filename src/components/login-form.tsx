@@ -17,7 +17,7 @@ const initialState: { message: string, errors?: any } = {
 function SubmitButton() {
   const { pending } = useFormStatus();
   return (
-    <Button type="submit" className="w-full" disabled={pending}>
+    <Button type="submit" className="w-full py-3 text-sm font-medium rounded-lg" disabled={pending}>
       {pending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
       {pending ? 'Signing In...' : 'Sign In'}
     </Button>
@@ -29,21 +29,18 @@ export function LoginForm() {
 
   return (
     <div className="flex h-full flex-col justify-center">
-       <div className="mb-4">
-        <h2 className="text-xl font-bold text-gray-800 mb-1">Welcome Back</h2>
-        <p className="text-gray-600 text-xs">Please sign in to your account</p>
-      </div>
-      <form action={formAction} className="space-y-3">
+      <form action={formAction} className="space-y-4">
         <div>
-            <Label htmlFor="email" className='text-xs font-medium text-gray-700 mb-1'>Username</Label>
+            <Label htmlFor="email" className='text-sm font-medium text-gray-700 mb-2 block'>Username</Label>
             <div className="relative flex items-center">
+              <User className="absolute left-3 h-4 w-4 text-gray-400" />
               <Input
                 id="email"
                 name="email"
                 type="text"
                 placeholder="Enter username"
                 required
-                className="w-full pr-3 py-2 text-sm border-gray-300 focus:ring-2 focus:ring-blue-200 focus:border-blue-400 focus:outline-none transition-all duration-200"
+                className="w-full pl-10 pr-4 py-3 text-sm border-gray-300 focus:ring-2 focus:ring-primary/20 focus:border-primary focus:outline-none transition-all duration-200 rounded-lg"
                 aria-describedby="email-error"
               />
             </div>
@@ -52,15 +49,16 @@ export function LoginForm() {
             )}
         </div>
         <div>
-            <Label htmlFor="password"  className='text-xs font-medium text-gray-700 mb-1'>Password</Label>
+            <Label htmlFor="password" className='text-sm font-medium text-gray-700 mb-2 block'>Password</Label>
             <div className="relative flex items-center">
+              <Lock className="absolute left-3 h-4 w-4 text-gray-400" />
               <Input
                 id="password"
                 name="password"
                 type="password"
                 placeholder="Enter password"
                 required
-                className="w-full pr-3 py-2 text-sm border-gray-300 focus:ring-2 focus:ring-blue-200 focus:border-blue-400 focus:outline-none transition-all duration-200"
+                className="w-full pl-10 pr-4 py-3 text-sm border-gray-300 focus:ring-2 focus:ring-primary/20 focus:border-primary focus:outline-none transition-all duration-200 rounded-lg"
                 aria-describedby="password-error"
               />
             </div>
@@ -79,10 +77,10 @@ export function LoginForm() {
 
         <SubmitButton />
       </form>
-      <div className="mt-3 p-2 bg-gray-50 border">
-        <p className="text-xs text-gray-600 mb-1 font-medium">Default Credentials:</p>
-         <p className="text-xs text-gray-600">Username: <span className="font-mono font-semibold">admin</span></p>
-         <p className="text-xs text-gray-600">Password: <span className="font-mono font-semibold">wras@dhh</span></p>
+      <div className="mt-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+        <p className="text-sm text-gray-700 mb-2 font-medium">Default Credentials:</p>
+         <p className="text-sm text-gray-600">Username: <span className="font-mono font-semibold text-gray-900">admin</span></p>
+         <p className="text-sm text-gray-600">Password: <span className="font-mono font-semibold text-gray-900">wras@dhh</span></p>
       </div>
     </div>
   );
