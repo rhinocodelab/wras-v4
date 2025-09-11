@@ -624,6 +624,40 @@ export async function getIslVideos(): Promise<string[]> {
   }
 }
 
+export async function getIslVideosByModel(model: 'male' | 'female'): Promise<string[]> {
+  const baseDir = path.join(process.cwd(), 'public');
+  const videoDir = path.join(baseDir, model === 'male' ? 'isl_dataset' : 'isl_dataset_female');
+
+  const findVideos = async (dir: string): Promise<string[]> => {
+    let videoFiles: string[] = [];
+    try {
+      const entries = await fs.readdir(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          videoFiles = videoFiles.concat(await findVideos(fullPath));
+        } else if (entry.isFile() && entry.name.endsWith('.mp4')) {
+          // Return the path relative to the 'public' directory
+          const relativePath = path.relative(baseDir, fullPath);
+          videoFiles.push(`/${relativePath.replace(/\\/g, '/')}`);
+        }
+      }
+    } catch (error) {
+       console.warn(`Could not read directory ${dir}:`, error);
+    }
+    return videoFiles;
+  };
+
+  try {
+    await fs.access(videoDir);
+    const videos = await findVideos(videoDir);
+    return videos;
+  } catch (error) {
+    console.warn(`${model} ISL dataset directory does not exist or is not accessible:`, error);
+    return [];
+  }
+}
+
 // Fast database-based function to get ISL videos (Male)
 export async function getIslVideosWithMetadata(): Promise<VideoMetadata[]> {
   const db = await getDb();
@@ -1379,12 +1413,12 @@ async function stitchVideosWithFfmpeg(videoPaths: string[], outputFileName: stri
     }
 }
 
-export async function getIslVideoPlaylist(text: string): Promise<{ playlist: string[]; unmatchedWords: string[] }> {
+export async function getIslVideoPlaylist(text: string, avatarModel: 'male' | 'female' = 'male'): Promise<{ playlist: string[]; unmatchedWords: string[] }> {
     if (!text.trim()) {
         return { playlist: [], unmatchedWords: [] };
     }
 
-    const allVideoPaths = await getIslVideos();
+    const allVideoPaths = await getIslVideosByModel(avatarModel);
     const videoMap = new Map<string, string>();
     
     // Create mapping from video names to paths
@@ -1392,10 +1426,12 @@ export async function getIslVideoPlaylist(text: string): Promise<{ playlist: str
         // Extract the filename without extension
         const fileName = p.split('/').pop()?.replace('.mp4', '') ?? '';
         if (fileName) {
-            videoMap.set(fileName.toLowerCase(), p);
+            // For new uploads, use filename directly; for existing videos with timestamps, remove timestamp
+            const wordName = fileName.replace(/_\d+$/, '');
+            videoMap.set(wordName.toLowerCase(), p);
         }
     });
-
+    
     // Process the text to handle spaced numbers properly
     const processedText = text.toLowerCase().replace(/[.,]/g, '');
     const words = processedText.split(/\s+/);
@@ -1472,14 +1508,14 @@ export async function getIslVideoPlaylist(text: string): Promise<{ playlist: str
     return { playlist: [], unmatchedWords };
 }
 
-export async function handleGenerateAnnouncement(input: AnnouncementInput): Promise<AnnouncementOutput> {
+export async function handleGenerateAnnouncement(input: AnnouncementInput, avatarModel: 'male' | 'female' = 'male'): Promise<AnnouncementOutput> {
   const announcementData = await generateAnnouncement(input);
   
   const englishAnnouncement = announcementData.announcements.find(a => a.language_code === 'en');
   if (englishAnnouncement && englishAnnouncement.text) {
       // Add spaces between digits for ISL video generation
       const processedText = englishAnnouncement.text.replace(/(\d)/g, ' $1 ');
-      const result = await getIslVideoPlaylist(processedText);
+      const result = await getIslVideoPlaylist(processedText, avatarModel);
       announcementData.isl_video_playlist = result.playlist;
   } else {
       announcementData.isl_video_playlist = [];
@@ -3254,7 +3290,7 @@ export async function clearGeneralAnnouncementVideos(): Promise<{ success: boole
 }
 
 // ISL Video Upload Functions
-export async function uploadIslVideo(formData: FormData): Promise<{ success: boolean; message: string; videoPath?: string }> {
+export async function uploadIslVideo(formData: FormData): Promise<{ success: boolean; message: string; videoPath?: string; exists?: boolean }> {
     try {
         const file = formData.get('video') as File;
         const videoName = formData.get('videoName') as string;
@@ -3303,6 +3339,18 @@ export async function uploadIslVideo(formData: FormData): Promise<{ success: boo
         const fileName = `${sanitizedName}.mp4`;
         const tempFilePath = path.join(videoFolder, `temp_${fileName}`);
         const finalFilePath = path.join(videoFolder, fileName);
+        
+        // Check if video already exists
+        try {
+            await fs.access(finalFilePath);
+            return { 
+                success: false, 
+                message: `A video with the name "${sanitizedName}" already exists. Do you want to overwrite it?`,
+                exists: true
+            };
+        } catch (error) {
+            // File doesn't exist, continue with upload
+        }
         
         // Save uploaded file temporarily
         const bytes = await file.arrayBuffer();
@@ -3434,7 +3482,7 @@ export async function deleteIslVideo(videoPath: string): Promise<{ success: bool
 }
 
 // ISL Female Video Upload Functions
-export async function uploadIslFemaleVideo(formData: FormData): Promise<{ success: boolean; message: string; videoPath?: string }> {
+export async function uploadIslFemaleVideo(formData: FormData): Promise<{ success: boolean; message: string; videoPath?: string; exists?: boolean }> {
     try {
         const file = formData.get('video') as File;
         const videoName = formData.get('videoName') as string;
@@ -3478,11 +3526,22 @@ export async function uploadIslFemaleVideo(formData: FormData): Promise<{ succes
         // Ensure directory exists
         await fs.mkdir(videoDir, { recursive: true });
         
-        // Generate unique filename
-        const timestamp = Date.now();
+        // Generate filename (use sanitized name directly, like male videos)
         const fileExtension = path.extname(file.name) || '.mp4';
-        const fileName = `${sanitizedName}_${timestamp}${fileExtension}`;
+        const fileName = `${sanitizedName}${fileExtension}`;
         const fullPath = path.join(videoDir, fileName);
+        
+        // Check if video already exists
+        try {
+            await fs.access(fullPath);
+            return { 
+                success: false, 
+                message: `A video with the name "${sanitizedName}" already exists. Do you want to overwrite it?`,
+                exists: true
+            };
+        } catch (error) {
+            // File doesn't exist, continue with upload
+        }
         
         // Convert file to buffer and save
         const bytes = await file.arrayBuffer();
@@ -3541,6 +3600,284 @@ export async function uploadIslFemaleVideo(formData: FormData): Promise<{ succes
             `, [relativePath, sanitizedName, fileSize, duration]);
             
             console.log(`ISL female video saved to database: ${relativePath}`);
+        } finally {
+            await db.close();
+        }
+        
+        return { 
+            success: true, 
+            message: 'Female ISL video uploaded and preprocessed successfully!',
+            videoPath: relativePath
+        };
+        
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('Error uploading ISL female video:', errorMessage);
+        return { 
+            success: false, 
+            message: `Failed to upload video: ${errorMessage}` 
+        };
+    }
+}
+
+// Overwrite functions for existing videos
+export async function overwriteIslVideo(formData: FormData): Promise<{ success: boolean; message: string; videoPath?: string }> {
+    try {
+        const file = formData.get('video') as File;
+        const videoName = formData.get('videoName') as string;
+        
+        if (!file) {
+            return { success: false, message: 'No video file provided' };
+        }
+        
+        // Validate video name is provided
+        if (!videoName || !videoName.trim()) {
+            return { success: false, message: 'Video name is required' };
+        }
+        
+        // Validate and sanitize video name
+        const trimmedName = videoName.trim();
+        if (trimmedName.includes(' ')) {
+            return { success: false, message: 'Video name cannot contain spaces' };
+        }
+        
+        // Convert to lowercase and sanitize
+        const sanitizedName = trimmedName.toLowerCase().replace(/[^a-zA-Z0-9-_]/g, '');
+        if (!sanitizedName) {
+            return { success: false, message: 'Video name must contain at least one valid character' };
+        }
+        
+        // Validate file type
+        if (!file.type.startsWith('video/')) {
+            return { success: false, message: 'Please upload a valid video file' };
+        }
+        
+        // Validate file size (max 3MB)
+        const maxSize = 3 * 1024 * 1024; // 3MB
+        if (file.size > maxSize) {
+            return { success: false, message: 'Video file size must be less than 3MB' };
+        }
+        
+        // Create ISL dataset directory if it doesn't exist
+        const islDatasetDir = path.join(process.cwd(), 'public', 'isl_dataset');
+        await fs.mkdir(islDatasetDir, { recursive: true });
+        
+        // Create individual folder for the video
+        const videoFolder = path.join(islDatasetDir, sanitizedName);
+        await fs.mkdir(videoFolder, { recursive: true });
+        
+        // Generate filename (use sanitized name directly)
+        const fileName = `${sanitizedName}.mp4`;
+        const tempFilePath = path.join(videoFolder, `temp_${fileName}`);
+        const finalFilePath = path.join(videoFolder, fileName);
+        
+        // Delete existing file if it exists
+        try {
+            await fs.unlink(finalFilePath);
+        } catch (error) {
+            // File doesn't exist, that's fine
+        }
+        
+        // Save uploaded file temporarily
+        const bytes = await file.arrayBuffer();
+        const buffer = Buffer.from(bytes);
+        await fs.writeFile(tempFilePath, buffer);
+        
+        console.log(`Temporary file saved: ${tempFilePath}`);
+        
+        // Preprocess the video using existing preprocessing function
+        const preprocessedPath = await preprocessVideoForStitching(`/isl_dataset/${sanitizedName}/temp_${fileName}`);
+        
+        if (!preprocessedPath) {
+            // Clean up temp file
+            try {
+                await fs.unlink(tempFilePath);
+            } catch (error) {
+                console.warn('Could not delete temp file:', error);
+            }
+            return { success: false, message: 'Failed to preprocess video. Please ensure the video file is valid.' };
+        }
+        
+        // Move preprocessed file to final location
+        const preprocessedFullPath = path.join(process.cwd(), 'public', preprocessedPath);
+        await fs.rename(preprocessedFullPath, finalFilePath);
+        
+        // Clean up temp file
+        try {
+            await fs.unlink(tempFilePath);
+        } catch (error) {
+            console.warn('Could not delete temp file:', error);
+        }
+        
+        const relativePath = `/isl_dataset/${sanitizedName}/${fileName}`;
+        console.log(`ISL video uploaded and preprocessed successfully: ${relativePath}`);
+        
+        // Update video in database
+        try {
+            const db = await getDb();
+            try {
+                // Get video duration using ffprobe
+                let duration: number | undefined;
+                try {
+                    const { exec } = await import('child_process');
+                    const { promisify } = await import('util');
+                    const execAsync = promisify(exec);
+                    
+                    const command = `ffprobe -v quiet -show_entries format=duration -of csv=p=0 "${finalFilePath}"`;
+                    const { stdout } = await execAsync(command);
+                    duration = parseFloat(stdout.trim());
+                    if (isNaN(duration)) duration = undefined;
+                } catch (ffprobeError) {
+                    console.warn('Failed to get video duration:', ffprobeError);
+                }
+                
+                // Get file size
+                const stats = await fs.stat(finalFilePath);
+                const fileSize = stats.size;
+                
+                // Update existing record or insert new one
+                await db.run(`
+                    INSERT OR REPLACE INTO isl_dataset_videos (file_path, name, size, duration, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                `, [relativePath, sanitizedName, fileSize, duration]);
+                
+                console.log(`ISL video updated in database: ${relativePath}`);
+            } finally {
+                await db.close();
+            }
+        } catch (dbError) {
+            console.warn('Failed to update video in database:', dbError);
+        }
+        
+        return { 
+            success: true, 
+            message: 'Video uploaded and preprocessed successfully!',
+            videoPath: relativePath
+        };
+        
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('Error uploading ISL video:', errorMessage);
+        return { 
+            success: false, 
+            message: `Failed to upload video: ${errorMessage}` 
+        };
+    }
+}
+
+export async function overwriteIslFemaleVideo(formData: FormData): Promise<{ success: boolean; message: string; videoPath?: string }> {
+    try {
+        const file = formData.get('video') as File;
+        const videoName = formData.get('videoName') as string;
+        
+        if (!file) {
+            return { success: false, message: 'No video file provided' };
+        }
+        
+        // Validate video name is provided
+        if (!videoName || !videoName.trim()) {
+            return { success: false, message: 'Video name is required' };
+        }
+        
+        // Validate and sanitize video name
+        const trimmedName = videoName.trim();
+        if (trimmedName.includes(' ')) {
+            return { success: false, message: 'Video name cannot contain spaces' };
+        }
+        
+        // Convert to lowercase and sanitize
+        const sanitizedName = trimmedName.toLowerCase().replace(/[^a-zA-Z0-9-_]/g, '');
+        if (!sanitizedName) {
+            return { success: false, message: 'Video name must contain at least one valid character' };
+        }
+        
+        // Validate file type
+        if (!file.type.startsWith('video/')) {
+            return { success: false, message: 'Please upload a valid video file' };
+        }
+        
+        // Validate file size (max 3MB)
+        const maxSize = 3 * 1024 * 1024; // 3MB
+        if (file.size > maxSize) {
+            return { success: false, message: 'Video file size must be less than 3MB' };
+        }
+        
+        // Create directory structure: public/isl_dataset_female/word_name/
+        const baseDir = path.join(process.cwd(), 'public', 'isl_dataset_female');
+        const videoDir = path.join(baseDir, sanitizedName);
+        
+        // Ensure directory exists
+        await fs.mkdir(videoDir, { recursive: true });
+        
+        // Generate filename (use sanitized name directly, like male videos)
+        const fileExtension = path.extname(file.name) || '.mp4';
+        const fileName = `${sanitizedName}${fileExtension}`;
+        const fullPath = path.join(videoDir, fileName);
+        
+        // Delete existing file if it exists
+        try {
+            await fs.unlink(fullPath);
+        } catch (error) {
+            // File doesn't exist, that's fine
+        }
+        
+        // Convert file to buffer and save
+        const bytes = await file.arrayBuffer();
+        const buffer = Buffer.from(bytes);
+        await fs.writeFile(fullPath, buffer);
+        
+        // Get video metadata
+        const stats = await fs.stat(fullPath);
+        const fileSize = stats.size;
+        
+        // Get video duration using ffprobe
+        let duration: number | null = null;
+        try {
+            const { spawn } = await import('child_process');
+            const ffprobe = spawn('ffprobe', [
+                '-v', 'quiet',
+                '-print_format', 'json',
+                '-show_format',
+                fullPath
+            ]);
+            
+            let output = '';
+            ffprobe.stdout.on('data', (data: Buffer) => {
+                output += data.toString();
+            });
+            
+            await new Promise((resolve, reject) => {
+                ffprobe.on('close', (code: number) => {
+                    if (code === 0) {
+                        try {
+                            const metadata = JSON.parse(output);
+                            duration = parseFloat(metadata.format.duration) || null;
+                            resolve(duration);
+                        } catch (parseError) {
+                            console.warn('Failed to parse ffprobe output:', parseError);
+                            resolve(null);
+                        }
+                    } else {
+                        console.warn('ffprobe failed with code:', code);
+                        resolve(null);
+                    }
+                });
+                ffprobe.on('error', reject);
+            });
+        } catch (ffprobeError) {
+            console.warn('Failed to get video duration:', ffprobeError);
+        }
+        
+        // Save to database
+        const relativePath = path.relative(path.join(process.cwd(), 'public'), fullPath).replace(/\\/g, '/');
+        const db = await getDb();
+        try {
+            await db.run(`
+                INSERT OR REPLACE INTO isl_dataset_female_videos (file_path, name, size, duration, created_at, updated_at)
+                VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            `, [relativePath, sanitizedName, fileSize, duration]);
+            
+            console.log(`ISL female video updated in database: ${relativePath}`);
         } finally {
             await db.close();
         }

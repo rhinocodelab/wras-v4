@@ -20,7 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { VideoMetadata, uploadIslVideo, uploadIslFemaleVideo, deleteIslVideo, deleteIslFemaleVideo } from '@/app/actions';
+import { VideoMetadata, uploadIslVideo, uploadIslFemaleVideo, deleteIslVideo, deleteIslFemaleVideo, overwriteIslVideo, overwriteIslFemaleVideo } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, FolderKanban, PlayCircle, FileVideo, Calendar, HardDrive, Clock, Upload, Trash2, Plus, ChevronLeft, ChevronRight, Search, Scissors } from 'lucide-react';
 
@@ -49,6 +49,8 @@ export default function IslDatasetPage() {
   const [stitchDragActive, setStitchDragActive] = useState(false);
   const [currentDataset, setCurrentDataset] = useState<'male' | 'female'>('male');
   const [uploadDatasetType, setUploadDatasetType] = useState<'male' | 'female'>('male');
+  const [showOverwriteDialog, setShowOverwriteDialog] = useState(false);
+  const [pendingUpload, setPendingUpload] = useState<{ file: File; videoName: string; datasetType: 'male' | 'female' } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const stitchFileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -263,6 +265,13 @@ export default function IslDatasetPage() {
         setVideoNameError('');
         // Refresh the video list
         await fetchVideos();
+      } else if (result.exists) {
+        // Video already exists, show overwrite confirmation
+        setPendingUpload({ file, videoName: nameToUse, datasetType: uploadDatasetType });
+        setShowOverwriteDialog(true);
+        setIsUploadModalOpen(false);
+        setVideoName('');
+        setVideoNameError('');
       } else {
         toast({
           variant: 'destructive',
@@ -281,6 +290,65 @@ export default function IslDatasetPage() {
       setIsUploading(false);
       setUploadProgress(0);
     }
+  };
+
+  const handleOverwriteConfirm = async () => {
+    if (!pendingUpload) return;
+
+    try {
+      setUploadProgress(0);
+      const progressInterval = setInterval(() => {
+        setUploadProgress(prev => {
+          if (prev >= 90) {
+            clearInterval(progressInterval);
+            return 90;
+          }
+          return prev + 10;
+        });
+      }, 200);
+
+      const formData = new FormData();
+      formData.append('video', pendingUpload.file);
+      formData.append('videoName', pendingUpload.videoName);
+
+      const result = pendingUpload.datasetType === 'male' 
+        ? await overwriteIslVideo(formData)
+        : await overwriteIslFemaleVideo(formData);
+      
+      clearInterval(progressInterval);
+      setUploadProgress(100);
+
+      if (result.success) {
+        toast({
+          title: 'Success',
+          description: result.message,
+        });
+        // Refresh the video list
+        await fetchVideos();
+      } else {
+        toast({
+          variant: 'destructive',
+          title: 'Upload Failed',
+          description: result.message,
+        });
+      }
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Upload Error',
+        description: 'An unexpected error occurred during upload',
+      });
+    } finally {
+      setShowOverwriteDialog(false);
+      setPendingUpload(null);
+      setUploadProgress(0);
+    }
+  };
+
+  const handleOverwriteCancel = () => {
+    setShowOverwriteDialog(false);
+    setPendingUpload(null);
+    setUploadProgress(0);
   };
 
   const handleDeleteVideo = async (videoPath: string, videoName: string) => {
@@ -842,6 +910,53 @@ export default function IslDatasetPage() {
                 <p>• Supported formats: MP4, AVI, MOV, WebM</p>
                 <p>• Maximum file size: 100MB</p>
                 <p>• Videos will be automatically preprocessed for optimal compatibility</p>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Overwrite Confirmation Dialog */}
+        <Dialog open={showOverwriteDialog} onOpenChange={setShowOverwriteDialog}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Video Already Exists</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <p className="text-sm text-gray-600">
+                A video with the name <strong>"{pendingUpload?.videoName}"</strong> already exists in the {pendingUpload?.datasetType} AI model dataset.
+              </p>
+              <p className="text-sm text-gray-600">
+                Do you want to overwrite the existing video?
+              </p>
+              {uploadProgress > 0 && (
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span>Uploading...</span>
+                    <span>{uploadProgress}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div
+                      className="bg-[#0F9D58] h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${uploadProgress}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+              <div className="flex justify-end space-x-2">
+                <Button
+                  variant="outline"
+                  onClick={handleOverwriteCancel}
+                  disabled={uploadProgress > 0}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleOverwriteConfirm}
+                  disabled={uploadProgress > 0}
+                  className="bg-red-600 hover:bg-red-700"
+                >
+                  Overwrite
+                </Button>
               </div>
             </div>
           </DialogContent>

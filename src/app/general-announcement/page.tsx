@@ -155,6 +155,7 @@ export default function GeneralAnnouncementPage() {
     const [islVideoPath, setIslVideoPath] = useState<string>('');
     const [isPublishing, setIsPublishing] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    const [avatarModel, setAvatarModel] = useState<'male' | 'female'>('male');
 
     const { toast } = useToast();
 
@@ -286,7 +287,7 @@ export default function GeneralAnnouncementPage() {
         setIsGeneratingVideo(true);
         try {
             const processedText = addSpacesToDigits(inputText);
-            const result = await getIslVideoPlaylist(processedText);
+            const result = await getIslVideoPlaylist(processedText, avatarModel);
             setIslPlaylist(result.playlist);
             setIslVideoPath(result.playlist[0] || '');
         } catch (error) {
@@ -299,7 +300,7 @@ export default function GeneralAnnouncementPage() {
         } finally {
             setIsGeneratingVideo(false);
         }
-    }, [inputText, toast]);
+    }, [inputText, avatarModel, toast]);
 
     const handleSaveAnnouncement = async () => {
         if (!announcementTitle.trim()) {
@@ -553,25 +554,57 @@ export default function GeneralAnnouncementPage() {
                                     placeholder="Enter English text here..."
                                     className="flex-1 resize-none"
                                 />
-                                <div className="flex gap-2">
-                                    <Button
-                                        onClick={handleTranslateText}
-                                        disabled={isTranslating || !inputText.trim()}
-                                        className="flex-1"
-                                    >
-                                        {isTranslating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                        <Languages className="mr-2 h-4 w-4" />
-                                        {isTranslating ? 'Translating...' : 'Translate'}
-                                    </Button>
-                                    <Button
-                                        onClick={handleGenerateVideo}
-                                        disabled={isGeneratingVideo || !inputText.trim()}
-                                        className="flex-1"
-                                    >
-                                        {isGeneratingVideo && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                        <Video className="mr-2 h-4 w-4" />
-                                        {isGeneratingVideo ? 'Generating...' : 'Generate ISL Video'}
-                                    </Button>
+                                <div className="space-y-3">
+                                    <div className="flex gap-2">
+                                        <Button
+                                            onClick={handleTranslateText}
+                                            disabled={isTranslating || !inputText.trim()}
+                                            className="flex-1"
+                                        >
+                                            {isTranslating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                            <Languages className="mr-2 h-4 w-4" />
+                                            {isTranslating ? 'Translating...' : 'Translate'}
+                                        </Button>
+                                        <Button
+                                            onClick={handleGenerateVideo}
+                                            disabled={isGeneratingVideo || !inputText.trim()}
+                                            className="flex-1"
+                                        >
+                                            {isGeneratingVideo && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                            <Video className="mr-2 h-4 w-4" />
+                                            {isGeneratingVideo ? 'Generating...' : 'Generate ISL Video'}
+                                        </Button>
+                                    </div>
+                                    
+                                    {/* AI Avatar Model Selection */}
+                                    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border">
+                                        <span className="text-sm font-medium text-gray-700">AI Avatar Model:</span>
+                                        <div className="flex items-center gap-1 bg-white rounded-md p-1 border">
+                                            <button
+                                                onClick={() => setAvatarModel('male')}
+                                                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 ${
+                                                    avatarModel === 'male'
+                                                        ? 'bg-primary text-primary-foreground shadow-sm'
+                                                        : 'text-gray-600 hover:text-gray-800 hover:bg-gray-100'
+                                                }`}
+                                            >
+                                                Male AI Model
+                                            </button>
+                                            <button
+                                                onClick={() => setAvatarModel('female')}
+                                                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 ${
+                                                    avatarModel === 'female'
+                                                        ? 'bg-primary text-primary-foreground shadow-sm'
+                                                        : 'text-gray-600 hover:text-gray-800 hover:bg-gray-100'
+                                                }`}
+                                            >
+                                                Female AI Model
+                                            </button>
+                                        </div>
+                                        <div className="text-xs text-gray-500">
+                                            {avatarModel === 'male' ? 'Using male ISL videos' : 'Using female ISL videos'}
+                                        </div>
+                                    </div>
                                 </div>
                             </CardContent>
                         </Card>
