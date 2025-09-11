@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -20,9 +20,9 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { getIslVideosWithMetadata, VideoMetadata, uploadIslVideo, deleteIslVideo } from '@/app/actions';
+import { VideoMetadata, uploadIslVideo, uploadIslFemaleVideo, deleteIslVideo, deleteIslFemaleVideo } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, FolderKanban, PlayCircle, FileVideo, Calendar, HardDrive, Clock, Upload, Trash2, Plus, ChevronLeft, ChevronRight, Search, Scissors, Info } from 'lucide-react';
+import { Loader2, FolderKanban, PlayCircle, FileVideo, Calendar, HardDrive, Clock, Upload, Trash2, Plus, ChevronLeft, ChevronRight, Search, Scissors } from 'lucide-react';
 
 const VIDEOS_PER_PAGE = 42; // 6 rows × 7 columns
 
@@ -47,15 +47,11 @@ export default function IslDatasetPage() {
   const [stitchedVideoName, setStitchedVideoName] = useState('');
   const [stitchedVideoNameError, setStitchedVideoNameError] = useState('');
   const [stitchDragActive, setStitchDragActive] = useState(false);
+  const [currentDataset, setCurrentDataset] = useState<'male' | 'female'>('male');
+  const [uploadDatasetType, setUploadDatasetType] = useState<'male' | 'female'>('male');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const stitchFileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
-
-  useEffect(() => {
-    fetchVideos();
-    // Clean up old preview files
-    cleanupOldPreviews();
-  }, []);
 
   const cleanupOldPreviews = async () => {
     try {
@@ -64,6 +60,46 @@ export default function IslDatasetPage() {
       console.warn('Failed to cleanup old preview files:', error);
     }
   };
+
+  const fetchVideos = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch(`/api/isl-dataset/${currentDataset}`);
+      const data = await response.json();
+      
+      if (data.success) {
+        setVideos(data.videos);
+        if (data.videos.length === 0) {
+          toast({
+            title: 'No Videos Found',
+            description: `The ${currentDataset} ISL dataset directory is empty or does not exist. Try syncing with the database.`,
+          });
+        }
+      } else {
+        throw new Error(data.error || 'Failed to fetch videos');
+      }
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: `Failed to fetch ${currentDataset} ISL dataset videos.`,
+      });
+      console.error('Failed to fetch ISL videos:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [currentDataset, toast]);
+
+  // Refetch videos when dataset type changes
+  useEffect(() => {
+    fetchVideos();
+  }, [currentDataset, fetchVideos]);
+
+  useEffect(() => {
+    fetchVideos();
+    // Clean up old preview files
+    cleanupOldPreviews();
+  }, [fetchVideos]);
 
   // Filter videos based on search query
   const filteredVideos = videos.filter(video =>
@@ -108,29 +144,6 @@ export default function IslDatasetPage() {
       return `${remainingSeconds}s`;
     }
   }
-
-  const fetchVideos = async () => {
-    setIsLoading(true);
-    try {
-      const videoMetadata = await getIslVideosWithMetadata();
-      setVideos(videoMetadata);
-      if (videoMetadata.length === 0) {
-        toast({
-          title: 'No Videos Found',
-          description: 'The ISL dataset directory is empty or does not exist. Try syncing with the database.',
-        });
-      }
-    } catch (error) {
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'Failed to fetch ISL dataset videos.',
-      });
-      console.error('Failed to fetch ISL videos:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const syncWithDatabase = async () => {
     setIsLoading(true);
@@ -233,7 +246,9 @@ export default function IslDatasetPage() {
       formData.append('video', file);
       formData.append('videoName', nameToUse);
 
-      const result = await uploadIslVideo(formData);
+      const result = uploadDatasetType === 'male' 
+        ? await uploadIslVideo(formData)
+        : await uploadIslFemaleVideo(formData);
       
       clearInterval(progressInterval);
       setUploadProgress(100);
@@ -274,7 +289,9 @@ export default function IslDatasetPage() {
     }
 
     try {
-      const result = await deleteIslVideo(videoPath);
+      const result = currentDataset === 'male' 
+        ? await deleteIslVideo(videoPath)
+        : await deleteIslFemaleVideo(videoPath);
       
       if (result.success) {
         toast({
@@ -646,6 +663,31 @@ export default function IslDatasetPage() {
           <p className="text-muted-foreground">
             A collection of pre-recorded ISL videos for various words and phrases.
           </p>
+          <div className="flex items-center gap-4 mt-2">
+            <span className="text-sm text-muted-foreground">Dataset Type:</span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setCurrentDataset('male')}
+                className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+                  currentDataset === 'male'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                }`}
+              >
+                Male AI Model
+              </button>
+              <button
+                onClick={() => setCurrentDataset('female')}
+                className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+                  currentDataset === 'female'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                }`}
+              >
+                Female AI Model
+              </button>
+            </div>
+          </div>
           {videos.length > 0 && (
             <p className="text-sm text-muted-foreground mt-1">
               {searchQuery ? (
@@ -711,6 +753,38 @@ export default function IslDatasetPage() {
                   Video name will be converted to lowercase and saved in its own folder
                 </p>
               </div>
+              <div>
+                <Label>AI Model Type *</Label>
+                <div className="flex items-center gap-4 mt-2">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name="datasetType"
+                      value="male"
+                      checked={uploadDatasetType === 'male'}
+                      onChange={(e) => setUploadDatasetType(e.target.value as 'male' | 'female')}
+                      disabled={isUploading}
+                      className="text-primary"
+                    />
+                    <span className="text-sm">Male AI Model</span>
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name="datasetType"
+                      value="female"
+                      checked={uploadDatasetType === 'female'}
+                      onChange={(e) => setUploadDatasetType(e.target.value as 'male' | 'female')}
+                      disabled={isUploading}
+                      className="text-primary"
+                    />
+                    <span className="text-sm">Female AI Model</span>
+                  </label>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Select the AI model type for this video upload
+                </p>
+              </div>
               <div
                 className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
                   !videoName.trim() || isUploading
@@ -764,7 +838,7 @@ export default function IslDatasetPage() {
               <div className="text-xs text-gray-500">
                 <p>• Video name is required and cannot contain spaces</p>
                 <p>• Video name will be converted to lowercase automatically</p>
-                <p>• Each video will be saved in its own folder: /isl_dataset/&lt;video-name&gt;/</p>
+                <p>• Each video will be saved in its own folder: /isl_dataset_{uploadDatasetType}/&lt;video-name&gt;/</p>
                 <p>• Supported formats: MP4, AVI, MOV, WebM</p>
                 <p>• Maximum file size: 100MB</p>
                 <p>• Videos will be automatically preprocessed for optimal compatibility</p>
@@ -1061,47 +1135,46 @@ export default function IslDatasetPage() {
                       <h3 className="font-medium text-sm text-gray-900 capitalize truncate w-full">
                         {video.name}
                       </h3>
-                      <Info className="h-4 w-4 text-gray-400 mt-1" />
                     </div>
 
                     {/* Hover Overlay */}
-                    <div className="absolute inset-0 bg-black bg-opacity-80 rounded-lg flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                      <div className="text-white text-center space-y-2">
+                    <div className="absolute inset-0 bg-black bg-opacity-80 rounded-lg flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 p-2">
+                      <div className="text-white text-center space-y-1">
                         {/* Duration */}
-                        <div className="flex items-center gap-1 text-xs">
-                          <Clock className="h-3 w-3" />
+                        <div className="flex items-center justify-center gap-1 text-xs">
+                          <Clock className="h-2.5 w-2.5" />
                           <span>
                             {video.duration ? formatDuration(video.duration) : 'Unknown'}
                           </span>
                         </div>
                         
                         {/* Size */}
-                        <div className="flex items-center gap-1 text-xs">
-                          <HardDrive className="h-3 w-3" />
+                        <div className="flex items-center justify-center gap-1 text-xs">
+                          <HardDrive className="h-2.5 w-2.5" />
                           <span>{(video.size / 1024 / 1024).toFixed(1)} MB</span>
                         </div>
 
                         {/* Action Buttons */}
-                        <div className="flex items-center gap-2 pt-1">
+                        <div className="flex items-center justify-center gap-1.5 pt-1">
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               handlePlayClick(video.path);
                             }}
-                            className="p-1.5 bg-green-600 hover:bg-green-700 rounded-full transition-colors"
+                            className="p-1 bg-green-600 hover:bg-green-700 rounded-full transition-colors"
                             title="Play Video"
                           >
-                            <PlayCircle className="h-4 w-4 text-white" />
+                            <PlayCircle className="h-3 w-3 text-white" />
                           </button>
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               handleDeleteVideo(video.path, video.name);
                             }}
-                            className="p-1.5 bg-red-600 hover:bg-red-700 rounded-full transition-colors"
+                            className="p-1 bg-red-600 hover:bg-red-700 rounded-full transition-colors"
                             title="Delete Video"
                           >
-                            <Trash2 className="h-4 w-4 text-white" />
+                            <Trash2 className="h-3 w-3 text-white" />
                           </button>
                         </div>
                       </div>
