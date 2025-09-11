@@ -3529,11 +3529,12 @@ export async function uploadIslFemaleVideo(formData: FormData): Promise<{ succes
         // Generate filename (use sanitized name directly, like male videos)
         const fileExtension = path.extname(file.name) || '.mp4';
         const fileName = `${sanitizedName}${fileExtension}`;
-        const fullPath = path.join(videoDir, fileName);
+        const tempFilePath = path.join(videoDir, `temp_${fileName}`);
+        const finalFilePath = path.join(videoDir, fileName);
         
         // Check if video already exists
         try {
-            await fs.access(fullPath);
+            await fs.access(finalFilePath);
             return { 
                 success: false, 
                 message: `A video with the name "${sanitizedName}" already exists. Do you want to overwrite it?`,
@@ -3543,13 +3544,39 @@ export async function uploadIslFemaleVideo(formData: FormData): Promise<{ succes
             // File doesn't exist, continue with upload
         }
         
-        // Convert file to buffer and save
+        // Save uploaded file temporarily
         const bytes = await file.arrayBuffer();
         const buffer = Buffer.from(bytes);
-        await fs.writeFile(fullPath, buffer);
+        await fs.writeFile(tempFilePath, buffer);
+        
+        console.log(`Temporary file saved: ${tempFilePath}`);
+        
+        // Preprocess the video using existing preprocessing function
+        const preprocessedPath = await preprocessVideoForStitching(`/isl_dataset_female/${sanitizedName}/temp_${fileName}`);
+        
+        if (!preprocessedPath) {
+            // Clean up temp file
+            try {
+                await fs.unlink(tempFilePath);
+            } catch (error) {
+                console.warn('Could not delete temp file:', error);
+            }
+            return { success: false, message: 'Failed to preprocess video. Please ensure the video file is valid.' };
+        }
+        
+        // Move preprocessed file to final location
+        const preprocessedFullPath = path.join(process.cwd(), 'public', preprocessedPath);
+        await fs.rename(preprocessedFullPath, finalFilePath);
+        
+        // Clean up temp file
+        try {
+            await fs.unlink(tempFilePath);
+        } catch (error) {
+            console.warn('Could not delete temp file:', error);
+        }
         
         // Get video metadata
-        const stats = await fs.stat(fullPath);
+        const stats = await fs.stat(finalFilePath);
         const fileSize = stats.size;
         
         // Get video duration using ffprobe
@@ -3560,7 +3587,7 @@ export async function uploadIslFemaleVideo(formData: FormData): Promise<{ succes
                 '-v', 'quiet',
                 '-print_format', 'json',
                 '-show_format',
-                fullPath
+                finalFilePath
             ]);
             
             let output = '';
@@ -3591,7 +3618,7 @@ export async function uploadIslFemaleVideo(formData: FormData): Promise<{ succes
         }
         
         // Save to database
-        const relativePath = path.relative(path.join(process.cwd(), 'public'), fullPath).replace(/\\/g, '/');
+        const relativePath = `/isl_dataset_female/${sanitizedName}/${fileName}`;
         const db = await getDb();
         try {
             await db.run(`
@@ -3812,22 +3839,49 @@ export async function overwriteIslFemaleVideo(formData: FormData): Promise<{ suc
         // Generate filename (use sanitized name directly, like male videos)
         const fileExtension = path.extname(file.name) || '.mp4';
         const fileName = `${sanitizedName}${fileExtension}`;
-        const fullPath = path.join(videoDir, fileName);
+        const tempFilePath = path.join(videoDir, `temp_${fileName}`);
+        const finalFilePath = path.join(videoDir, fileName);
         
         // Delete existing file if it exists
         try {
-            await fs.unlink(fullPath);
+            await fs.unlink(finalFilePath);
         } catch (error) {
             // File doesn't exist, that's fine
         }
         
-        // Convert file to buffer and save
+        // Save uploaded file temporarily
         const bytes = await file.arrayBuffer();
         const buffer = Buffer.from(bytes);
-        await fs.writeFile(fullPath, buffer);
+        await fs.writeFile(tempFilePath, buffer);
+        
+        console.log(`Temporary file saved: ${tempFilePath}`);
+        
+        // Preprocess the video using existing preprocessing function
+        const preprocessedPath = await preprocessVideoForStitching(`/isl_dataset_female/${sanitizedName}/temp_${fileName}`);
+        
+        if (!preprocessedPath) {
+            // Clean up temp file
+            try {
+                await fs.unlink(tempFilePath);
+            } catch (error) {
+                console.warn('Could not delete temp file:', error);
+            }
+            return { success: false, message: 'Failed to preprocess video. Please ensure the video file is valid.' };
+        }
+        
+        // Move preprocessed file to final location
+        const preprocessedFullPath = path.join(process.cwd(), 'public', preprocessedPath);
+        await fs.rename(preprocessedFullPath, finalFilePath);
+        
+        // Clean up temp file
+        try {
+            await fs.unlink(tempFilePath);
+        } catch (error) {
+            console.warn('Could not delete temp file:', error);
+        }
         
         // Get video metadata
-        const stats = await fs.stat(fullPath);
+        const stats = await fs.stat(finalFilePath);
         const fileSize = stats.size;
         
         // Get video duration using ffprobe
@@ -3838,7 +3892,7 @@ export async function overwriteIslFemaleVideo(formData: FormData): Promise<{ suc
                 '-v', 'quiet',
                 '-print_format', 'json',
                 '-show_format',
-                fullPath
+                finalFilePath
             ]);
             
             let output = '';
@@ -3869,7 +3923,7 @@ export async function overwriteIslFemaleVideo(formData: FormData): Promise<{ suc
         }
         
         // Save to database
-        const relativePath = path.relative(path.join(process.cwd(), 'public'), fullPath).replace(/\\/g, '/');
+        const relativePath = `/isl_dataset_female/${sanitizedName}/${fileName}`;
         const db = await getDb();
         try {
             await db.run(`

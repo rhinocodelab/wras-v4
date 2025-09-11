@@ -588,7 +588,7 @@ export default function GeneralAnnouncementPage() {
                                                         : 'text-gray-600 hover:text-gray-800 hover:bg-gray-100'
                                                 }`}
                                             >
-                                                Male AI Model
+                                                Male
                                             </button>
                                             <button
                                                 onClick={() => setAvatarModel('female')}
@@ -598,7 +598,7 @@ export default function GeneralAnnouncementPage() {
                                                         : 'text-gray-600 hover:text-gray-800 hover:bg-gray-100'
                                                 }`}
                                             >
-                                                Female AI Model
+                                                Female
                                             </button>
                                         </div>
                                         <div className="text-xs text-gray-500">

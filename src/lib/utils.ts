@@ -53,7 +53,7 @@ export function generateTextToIslHtml(
         .info-header p { margin: 8px 0 0; font-size: 1.6em; letter-spacing: 1px; }
         .route { display: flex; align-items: center; justify-content: center; gap: 20px; }
         .video-container { width: 80%; max-width: 960px; aspect-ratio: 16 / 9; background-color: #111; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
-        video { width: 100%; height: 100%; object-fit: cover; }
+        video { width: 100%; height: 100%; object-fit: contain; }
         .ticker-wrap { position: fixed; bottom: 0; left: 0; width: 100%; background-color: #1a1a1a; padding: 20px; overflow: hidden; min-height: 80px; display: flex; justify-content: center; align-items: center; }
         .ticker { display: flex; align-items: center; justify-content: center; line-height: 1.4; white-space: nowrap; margin: 0; text-align: center; width: 100%; }
         .ticker-item { margin-right: 50px; }
