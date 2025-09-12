@@ -237,6 +237,39 @@ export async function getDb() {
     )
   `);
 
+  // Podcasts Table
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS podcasts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      description TEXT,
+      folder_path TEXT NOT NULL,
+      status TEXT DEFAULT 'active',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // Podcast Playlists Table
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS podcast_playlists (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      podcast_id INTEGER NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT,
+      audio_language TEXT NOT NULL, -- 'en', 'hi', 'mr', 'gu'
+      original_audio_path TEXT NOT NULL,
+      transcribed_text TEXT,
+      translated_text TEXT,
+      isl_video_path TEXT,
+      avatar_model TEXT, -- 'male' or 'female'
+      status TEXT DEFAULT 'active',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (podcast_id) REFERENCES podcasts(id) ON DELETE CASCADE
+    )
+  `);
+
   return db;
 }
 
@@ -258,6 +291,32 @@ export type GeneralAnnouncement = {
   translations: { en: string; mr: string; hi: string; gu: string };
   isl_video_playlist: string[];
   file_path: string;
+  status?: string;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type Podcast = {
+  id?: number;
+  name: string;
+  description?: string;
+  folder_path: string;
+  status?: string;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type PodcastPlaylist = {
+  id?: number;
+  podcast_id: number;
+  title: string;
+  description?: string;
+  audio_language: 'en' | 'hi' | 'mr' | 'gu';
+  original_audio_path: string;
+  transcribed_text?: string;
+  translated_text?: string;
+  isl_video_path?: string;
+  avatar_model?: 'male' | 'female';
   status?: string;
   created_at?: string;
   updated_at?: string;
@@ -1330,7 +1389,7 @@ async function createFinalIslAnnouncementVideo(
     }
 }
 
-async function stitchVideosWithFfmpeg(videoPaths: string[], outputFileName: string, normalizeVideos: boolean = false): Promise<string | null> {
+export async function stitchVideosWithFfmpeg(videoPaths: string[], outputFileName: string, normalizeVideos: boolean = false): Promise<string | null> {
     if (videoPaths.length === 0) return null;
     if (videoPaths.length === 1) return videoPaths[0]; // No need to stitch if only one video
 

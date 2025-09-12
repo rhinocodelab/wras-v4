@@ -40,6 +40,7 @@ import AutoSpeechDetectionPage from '@/app/speech-auto-detection/page';
 import GeneralAnnouncementPage from '@/app/general-announcement/page';
 import SpeechLanguageDetectionPage from '@/app/speech-language-detection/page';
 import AudioFileAnalysisPage from '@/app/audio-file-analysis/page';
+import PmModiMannKiBaatPage from '@/app/pm-modi-mann-ki-baat/page';
 
 
 export default function HomePage() {
@@ -84,6 +85,8 @@ export default function HomePage() {
         return <SpeechLanguageDetectionPage />;
       case 'audio-file-analysis':
         return <AudioFileAnalysisPage />;
+      case 'pm-modi-mann-ki-baat':
+        return <PmModiMannKiBaatPage />;
       default:
         return <Dashboard />;
     }
@@ -245,6 +248,22 @@ export default function HomePage() {
                   Speech to ISL
                 </div>
               </div>
+
+              {/* Podcasts Section */}
+              <div className="space-y-2">
+                <div className="px-2 py-1">
+                  <h3 className="text-base font-semibold uppercase tracking-wider" style={{ color: '#F4B400' }}>
+                    Podcasts
+                  </h3>
+                </div>
+                <div
+                  onClick={() => setActiveView('pm-modi-mann-ki-baat')}
+                  className={getLinkClassName('pm-modi-mann-ki-baat')}
+                >
+                  <Megaphone className="h-4 w-4 text-red-600" />
+                  PM Modi : Mann Ki Baat
+                </div>
+              </div>
             </div>
           </nav>
         </aside>
@@ -384,6 +403,22 @@ export default function HomePage() {
                     >
                       <Speech className="h-5 w-5" />
                       Speech to ISL
+                    </div>
+                  </div>
+
+                  {/* Podcasts Section */}
+                  <div className="space-y-2">
+                    <div className="px-2 py-1">
+                      <h3 className="text-sm font-semibold uppercase tracking-wider" style={{ color: '#F4B400' }}>
+                        Podcasts
+                      </h3>
+                    </div>
+                    <div
+                      onClick={() => setActiveView('pm-modi-mann-ki-baat')}
+                      className={getMobileLinkClassName('pm-modi-mann-ki-baat')}
+                    >
+                      <Megaphone className="h-5 w-5 text-red-600" />
+                      PM Modi : Mann Ki Baat
                     </div>
                   </div>
                 </nav>
