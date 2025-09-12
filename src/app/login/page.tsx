@@ -17,10 +17,10 @@ export default async function LoginPage() {
       </Head>
       <div className="flex min-h-screen w-full flex-col bg-gray-100">
         <main className="flex flex-1 items-center justify-center p-4">
-          <div className="w-full max-w-4xl overflow-hidden rounded-lg bg-white shadow-2xl">
+          <div className="w-full max-w-2xl overflow-hidden rounded-lg bg-white shadow-2xl">
             <div className="flex flex-col lg:flex-row">
               {/* Left Side - Information and Logo */}
-              <div className="flex w-full flex-col items-center justify-center bg-gradient-to-br from-primary to-primary/80 p-8 text-white lg:w-1/2 relative overflow-hidden">
+              <div className="flex w-full flex-col items-center justify-center bg-gradient-to-br from-primary to-primary/80 p-6 text-white lg:w-1/2 relative overflow-hidden">
                 {/* Background Pattern */}
                 <div className="absolute inset-0 opacity-10">
                   <div className="absolute top-10 left-10 w-32 h-32 border border-white/20 rounded-full"></div>
@@ -38,22 +38,22 @@ export default async function LoginPage() {
                 
                 {/* Main Content */}
                 <div className="text-center max-w-md z-10">
-                  <p className="mb-6 text-2xl leading-relaxed text-blue-100">
+                  <p className="mb-4 text-xl leading-relaxed text-blue-100">
                     Western Railway Announcement System for Deaf and Hard of Hearing
                   </p>
                   
-                  <div className="mx-auto mb-6 h-1 w-16 bg-white/30 rounded-full"></div>
+                  <div className="mx-auto mb-4 h-1 w-16 bg-white/30 rounded-full"></div>
                   
-                  <p className="text-base text-blue-100 leading-relaxed">
+                  <p className="text-sm text-blue-100 leading-relaxed">
                     Empowering accessibility through
                     <br />
                     AI-powered visual railway announcements
                   </p>
                   
                   {/* Features List */}
-                  <div className="mt-8 text-left">
-                    <h3 className="text-lg font-semibold mb-4 text-left">Key Features</h3>
-                    <ul className="space-y-2 text-sm text-blue-100">
+                  <div className="mt-6 text-left">
+                    <h3 className="text-base font-semibold mb-3 text-left">Key Features</h3>
+                    <ul className="space-y-1 text-xs text-blue-100">
                       <li className="flex items-center">
                         <div className="w-2 h-2 bg-white/60 rounded-full mr-3"></div>
                         Real-time ISL video generation
@@ -76,7 +76,7 @@ export default async function LoginPage() {
               </div>
               
               {/* Right Side - Login Form */}
-              <div className="flex w-full flex-col justify-center p-8 lg:w-1/2">
+              <div className="flex w-full flex-col justify-center p-6 lg:w-1/2">
                 {/* Logo */}
                 <div className="mb-6 text-center">
                   <img 
@@ -84,11 +84,6 @@ export default async function LoginPage() {
                     alt="Logo" 
                     className="mx-auto"
                   />
-                </div>
-                
-                <div className="mb-8">
-                  <h2 className="text-2xl font-bold text-gray-900 mb-2">Welcome Back</h2>
-                  <p className="text-gray-600">Please sign in to your account</p>
                 </div>
                 
                 <LoginForm />

@@ -10,6 +10,32 @@ import { translateAllRoutes, translateText as translateFlowText } from '@/ai/flo
 import { generateSpeech } from '@/ai/flows/tts-flow';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { createWriteStream } from 'fs';
+
+// Helper function to stream file uploads to avoid memory issues
+async function streamFileToDisk(file: File, filePath: string): Promise<void> {
+    const writeStream = createWriteStream(filePath);
+    const stream = file.stream();
+    const reader = stream.getReader();
+    
+    try {
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            writeStream.write(value);
+        }
+        writeStream.end();
+        
+        // Wait for the write stream to finish
+        await new Promise<void>((resolve, reject) => {
+            writeStream.on('finish', () => resolve());
+            writeStream.on('error', (error) => reject(error));
+        });
+    } catch (error) {
+        writeStream.destroy();
+        throw error;
+    }
+}
 import { generateAnnouncement, AnnouncementInput, AnnouncementOutput, generateTemplateAudio } from '@/ai/flows/announcement-flow';
 import { transcribeAudio } from '@/ai/flows/speech-to-text-flow';
 import { getCustomStationTranslation } from '@/lib/translation-utils';
@@ -1134,6 +1160,11 @@ async function preprocessVideoForStitching(videoPath: string): Promise<string | 
         }
         
         console.log(`Video pre-processed successfully: ${outputPath} (${outputStats.size} bytes)`);
+        
+        // Force garbage collection to free up memory after processing
+        if (global.gc) {
+            global.gc();
+        }
         
         // Validate the pre-processed video
         const validation = await validateVideoFile(outputPath.replace(path.join(process.cwd(), 'public'), ''));
@@ -3352,12 +3383,15 @@ export async function uploadIslVideo(formData: FormData): Promise<{ success: boo
             // File doesn't exist, continue with upload
         }
         
-        // Save uploaded file temporarily
-        const bytes = await file.arrayBuffer();
-        const buffer = Buffer.from(bytes);
-        await fs.writeFile(tempFilePath, buffer);
+        // Save uploaded file temporarily using streaming to avoid memory issues
+        await streamFileToDisk(file, tempFilePath);
         
         console.log(`Temporary file saved: ${tempFilePath}`);
+        
+        // Force garbage collection to free up memory
+        if (global.gc) {
+            global.gc();
+        }
         
         // Preprocess the video using existing preprocessing function
         const preprocessedPath = await preprocessVideoForStitching(`/isl_dataset/${sanitizedName}/temp_${fileName}`);
@@ -3544,12 +3578,15 @@ export async function uploadIslFemaleVideo(formData: FormData): Promise<{ succes
             // File doesn't exist, continue with upload
         }
         
-        // Save uploaded file temporarily
-        const bytes = await file.arrayBuffer();
-        const buffer = Buffer.from(bytes);
-        await fs.writeFile(tempFilePath, buffer);
+        // Save uploaded file temporarily using streaming to avoid memory issues
+        await streamFileToDisk(file, tempFilePath);
         
         console.log(`Temporary file saved: ${tempFilePath}`);
+        
+        // Force garbage collection to free up memory
+        if (global.gc) {
+            global.gc();
+        }
         
         // Preprocess the video using existing preprocessing function
         const preprocessedPath = await preprocessVideoForStitching(`/isl_dataset_female/${sanitizedName}/temp_${fileName}`);
@@ -3705,12 +3742,15 @@ export async function overwriteIslVideo(formData: FormData): Promise<{ success: 
             // File doesn't exist, that's fine
         }
         
-        // Save uploaded file temporarily
-        const bytes = await file.arrayBuffer();
-        const buffer = Buffer.from(bytes);
-        await fs.writeFile(tempFilePath, buffer);
+        // Save uploaded file temporarily using streaming to avoid memory issues
+        await streamFileToDisk(file, tempFilePath);
         
         console.log(`Temporary file saved: ${tempFilePath}`);
+        
+        // Force garbage collection to free up memory
+        if (global.gc) {
+            global.gc();
+        }
         
         // Preprocess the video using existing preprocessing function
         const preprocessedPath = await preprocessVideoForStitching(`/isl_dataset/${sanitizedName}/temp_${fileName}`);
@@ -3849,12 +3889,15 @@ export async function overwriteIslFemaleVideo(formData: FormData): Promise<{ suc
             // File doesn't exist, that's fine
         }
         
-        // Save uploaded file temporarily
-        const bytes = await file.arrayBuffer();
-        const buffer = Buffer.from(bytes);
-        await fs.writeFile(tempFilePath, buffer);
+        // Save uploaded file temporarily using streaming to avoid memory issues
+        await streamFileToDisk(file, tempFilePath);
         
         console.log(`Temporary file saved: ${tempFilePath}`);
+        
+        // Force garbage collection to free up memory
+        if (global.gc) {
+            global.gc();
+        }
         
         // Preprocess the video using existing preprocessing function
         const preprocessedPath = await preprocessVideoForStitching(`/isl_dataset_female/${sanitizedName}/temp_${fileName}`);

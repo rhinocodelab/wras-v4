@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { writeFile, mkdir, unlink, readdir } from 'fs/promises';
+import { writeFile, mkdir, unlink, readdir, createWriteStream } from 'fs/promises';
+import { createWriteStream as createWriteStreamSync } from 'fs';
 import { join } from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
@@ -82,14 +83,36 @@ export async function POST(request: NextRequest) {
     await mkdir(sessionDir, { recursive: true });
 
     try {
-      // Save uploaded videos temporarily
+      // Save uploaded videos temporarily using streaming to avoid memory issues
       const tempVideoPaths: string[] = [];
       for (let i = 0; i < videoFiles.length; i++) {
         const file = videoFiles[i];
         const tempPath = join(sessionDir, `input_${i}_${file.name}`);
-        const buffer = Buffer.from(await file.arrayBuffer());
-        await writeFile(tempPath, buffer);
-        tempVideoPaths.push(tempPath);
+        
+        // Use streaming to avoid loading entire file into memory
+        const writeStream = createWriteStreamSync(tempPath);
+        const stream = file.stream();
+        const reader = stream.getReader();
+        
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            writeStream.write(value);
+          }
+          writeStream.end();
+          
+          // Wait for the write stream to finish
+          await new Promise<void>((resolve, reject) => {
+            writeStream.on('finish', () => resolve());
+            writeStream.on('error', (error) => reject(error));
+          });
+          
+          tempVideoPaths.push(tempPath);
+        } catch (error) {
+          writeStream.destroy();
+          throw error;
+        }
       }
 
       // Preprocess each video

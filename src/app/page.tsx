@@ -115,7 +115,7 @@ export default function HomePage() {
         <aside className="hidden w-72 flex-col border-r bg-background sm:flex">
           <div className="flex h-16 items-center border-b px-6">
               <div className="flex items-center gap-2 font-semibold text-primary">
-                  <TramFront className="h-6 w-6" />
+                  <img src="/logo.png" alt="WRAS Logo" className="h-28 w-28" />
                   <span className="text-xl font-bold text-primary">WRAS-DHH</span>
               </div>
           </div>
@@ -132,14 +132,14 @@ export default function HomePage() {
                   onClick={() => setActiveView('dashboard')}
                   className={getLinkClassName('dashboard')}
                 >
-                  <Home className="h-4 w-4" />
+                  <Home className="h-4 w-4 text-red-600" />
                   Dashboard
                 </div>
                 <div
                   onClick={() => setActiveView('route-management')}
                   className={getLinkClassName('route-management')}
                 >
-                  <GitFork className="h-4 w-4" />
+                  <GitFork className="h-4 w-4 text-red-600" />
                   Route Management
                 </div>
               </div>
@@ -183,14 +183,14 @@ export default function HomePage() {
                   onClick={() => setActiveView('speech-language-detection')}
                   className={getLinkClassName('speech-language-detection')}
                 >
-                  <MessageSquare className="h-4 w-4" />
+                  <MessageSquare className="h-4 w-4 text-red-600" />
                   Speech Analysis & Translation
                 </div>
                 <div
                   onClick={() => setActiveView('audio-file-analysis')}
                   className={getLinkClassName('audio-file-analysis')}
                 >
-                  <FileAudio className="h-4 w-4" />
+                  <FileAudio className="h-4 w-4 text-red-600" />
                   Audio File Analysis & Translation
                 </div>
               </div>
@@ -206,7 +206,7 @@ export default function HomePage() {
                   onClick={() => setActiveView('isl-dataset')}
                   className={getLinkClassName('isl-dataset')}
                 >
-                  <FolderKanban className="h-4 w-4" />
+                  <FolderKanban className="h-4 w-4 text-red-600" />
                   ISL Dataset
                 </div>
                 {/* <div
@@ -220,14 +220,14 @@ export default function HomePage() {
                   onClick={() => setActiveView('text-to-isl')}
                   className={getLinkClassName('text-to-isl')}
                 >
-                  <Text className="h-4 w-4" />
+                  <Text className="h-4 w-4 text-red-600" />
                   Text to ISL
                 </div>
                 <div
                   onClick={() => setActiveView('general-announcement')}
                   className={getLinkClassName('general-announcement')}
                 >
-                  <Megaphone className="h-4 w-4" />
+                  <Megaphone className="h-4 w-4 text-red-600" />
                   General Announcement
                 </div>
                 <div
@@ -250,14 +250,15 @@ export default function HomePage() {
         </aside>
         <div className="flex flex-1 flex-col">
           <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-4 border-b bg-background px-4 sm:px-6">
-            <Sheet>
-              <SheetTrigger asChild>
-                <Button size="icon" variant="outline" className="sm:hidden">
-                  <PanelLeft className="h-5 w-5" />
-                  <span className="sr-only">Toggle Menu</span>
-                </Button>
-              </SheetTrigger>
-              <SheetContent side="left" className="sm:max-w-xs">
+            <div className="flex items-center gap-3">
+              <Sheet>
+                <SheetTrigger asChild>
+                  <Button size="icon" variant="outline" className="sm:hidden">
+                    <PanelLeft className="h-5 w-5" />
+                    <span className="sr-only">Toggle Menu</span>
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="left" className="sm:max-w-xs">
                 <nav className="grid gap-6 text-lg font-medium">
                   <Link
                     href="#"
@@ -279,14 +280,14 @@ export default function HomePage() {
                       onClick={() => setActiveView('dashboard')}
                       className={getMobileLinkClassName('dashboard')}
                     >
-                      <Home className="h-5 w-5" />
+                      <Home className="h-5 w-5 text-red-600" />
                       Dashboard
                     </div>
                     <div
                       onClick={() => setActiveView('route-management')}
                       className={getMobileLinkClassName('route-management')}
                     >
-                      <GitFork className="h-5 w-5" />
+                      <GitFork className="h-5 w-5 text-red-600" />
                       Route Management
                     </div>
                   </div>
@@ -330,14 +331,14 @@ export default function HomePage() {
                       onClick={() => setActiveView('speech-language-detection')}
                       className={getMobileLinkClassName('speech-language-detection')}
                     >
-                      <MessageSquare className="h-5 w-5" />
+                      <MessageSquare className="h-5 w-5 text-red-600" />
                       Speech Analysis & Translation
                     </div>
                     <div
                       onClick={() => setActiveView('audio-file-analysis')}
                       className={getMobileLinkClassName('audio-file-analysis')}
                     >
-                      <FileAudio className="h-5 w-5" />
+                      <FileAudio className="h-5 w-5 text-red-600" />
                       Audio File Analysis & Translation
                     </div>
                   </div>
@@ -353,7 +354,7 @@ export default function HomePage() {
                       onClick={() => setActiveView('isl-dataset')}
                       className={getMobileLinkClassName('isl-dataset')}
                     >
-                      <FolderKanban className="h-5 w-5" />
+                      <FolderKanban className="h-5 w-5 text-red-600" />
                       ISL Dataset
                     </div>
                     {/* <div
@@ -367,7 +368,7 @@ export default function HomePage() {
                       onClick={() => setActiveView('text-to-isl')}
                       className={getMobileLinkClassName('text-to-isl')}
                     >
-                      <Text className="h-5 w-5" />
+                      <Text className="h-5 w-5 text-red-600" />
                       Text to ISL
                     </div>
                     <div
@@ -388,6 +389,11 @@ export default function HomePage() {
                 </nav>
               </SheetContent>
             </Sheet>
+              <div className="flex items-center gap-2 font-semibold text-primary sm:hidden">
+                <img src="/logo.png" alt="WRAS Logo" className="h-18 w-18" />
+                <span className="text-lg font-bold text-primary">WRAS-DHH</span>
+              </div>
+            </div>
             <div className="ml-auto flex items-center gap-4">
               {session && (
                 <div className="flex items-center gap-2 text-base font-medium">
