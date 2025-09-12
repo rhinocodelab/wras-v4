@@ -36,8 +36,6 @@ export default function IslDatasetPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [dragActive, setDragActive] = useState(false);
-  const [videoName, setVideoName] = useState('');
-  const [videoNameError, setVideoNameError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [isStitchModalOpen, setIsStitchModalOpen] = useState(false);
   const [uploadedVideos, setUploadedVideos] = useState<File[]>([]);
@@ -54,6 +52,21 @@ export default function IslDatasetPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const stitchFileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+
+  // Helper function to extract and sanitize folder name from filename
+  const extractFolderName = (filename: string): string => {
+    // Remove file extension
+    const nameWithoutExt = filename.replace(/\.[^/.]+$/, '');
+    
+    // Sanitize: convert to lowercase, replace spaces and special chars with hyphens
+    const sanitized = nameWithoutExt
+      .toLowerCase()
+      .replace(/[^a-zA-Z0-9-_]/g, '-')
+      .replace(/-+/g, '-') // Replace multiple hyphens with single hyphen
+      .replace(/^-|-$/g, ''); // Remove leading/trailing hyphens
+    
+    return sanitized || 'video'; // Fallback if name becomes empty
+  };
 
   const cleanupOldPreviews = async () => {
     try {
@@ -190,20 +203,18 @@ export default function IslDatasetPage() {
     return '';
   };
 
-  const handleFileUpload = async (file: File, videoNameInput?: string) => {
+  const handleFileUpload = async (file: File) => {
     if (!file) return;
 
-    // Use the state video name if not provided
-    const nameToUse = videoNameInput || videoName;
+    // Extract folder name from filename
+    const folderName = extractFolderName(file.name);
     
-    // Validate video name
-    const nameError = validateVideoName(nameToUse);
-    if (nameError) {
-      setVideoNameError(nameError);
+    // Validate extracted folder name
+    if (!folderName || folderName.length === 0) {
       toast({
         variant: 'destructive',
-        title: 'Invalid Video Name',
-        description: nameError,
+        title: 'Invalid Filename',
+        description: 'Could not extract a valid folder name from the filename',
       });
       return;
     }
@@ -246,7 +257,7 @@ export default function IslDatasetPage() {
 
       const formData = new FormData();
       formData.append('video', file);
-      formData.append('videoName', nameToUse);
+      formData.append('videoName', folderName);
 
       const result = uploadDatasetType === 'male' 
         ? await uploadIslVideo(formData)
@@ -258,20 +269,16 @@ export default function IslDatasetPage() {
       if (result.success) {
         toast({
           title: 'Success',
-          description: result.message,
+          description: `Video saved to folder: ${folderName}`,
         });
         setIsUploadModalOpen(false);
-        setVideoName('');
-        setVideoNameError('');
         // Refresh the video list
         await fetchVideos();
       } else if (result.exists) {
         // Video already exists, show overwrite confirmation
-        setPendingUpload({ file, videoName: nameToUse, datasetType: uploadDatasetType });
+        setPendingUpload({ file, videoName: folderName, datasetType: uploadDatasetType });
         setShowOverwriteDialog(true);
         setIsUploadModalOpen(false);
-        setVideoName('');
-        setVideoNameError('');
       } else {
         toast({
           variant: 'destructive',
@@ -321,7 +328,7 @@ export default function IslDatasetPage() {
       if (result.success) {
         toast({
           title: 'Success',
-          description: result.message,
+          description: `Video replaced in folder: ${pendingUpload.videoName}`,
         });
         // Refresh the video list
         await fetchVideos();
@@ -413,15 +420,6 @@ export default function IslDatasetPage() {
     }
   };
 
-  const handleVideoNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setVideoName(value);
-    
-    // Clear error when user starts typing
-    if (videoNameError) {
-      setVideoNameError('');
-    }
-  };
 
   const handleStitchVideos = async () => {
     if (uploadedVideos.length < 2) {
@@ -805,23 +803,6 @@ export default function IslDatasetPage() {
             </DialogHeader>
             <div className="space-y-4">
               <div>
-                <Label htmlFor="videoName">Video Name *</Label>
-                <Input
-                  id="videoName"
-                  value={videoName}
-                  onChange={handleVideoNameChange}
-                  placeholder="Enter a name for this video (no spaces, lowercase)"
-                  className={`mt-1 ${videoNameError ? 'border-red-500' : ''}`}
-                  disabled={isUploading}
-                />
-                {videoNameError && (
-                  <p className="text-sm text-red-500 mt-1">{videoNameError}</p>
-                )}
-                <p className="text-xs text-gray-500 mt-1">
-                  Video name will be converted to lowercase and saved in its own folder
-                </p>
-              </div>
-              <div>
                 <Label>AI Model Type *</Label>
                 <div className="flex items-center gap-4 mt-2">
                   <label className="flex items-center gap-2">
@@ -855,28 +836,28 @@ export default function IslDatasetPage() {
               </div>
               <div
                 className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
-                  !videoName.trim() || isUploading
+                  isUploading
                     ? 'border-gray-200 bg-gray-50 cursor-not-allowed'
                     : dragActive
                     ? 'border-[#0F9D58] bg-[#0F9D58]/5'
                     : 'border-gray-300 hover:border-gray-400'
                 }`}
-                onDragEnter={videoName.trim() && !isUploading ? handleDrag : undefined}
-                onDragLeave={videoName.trim() && !isUploading ? handleDrag : undefined}
-                onDragOver={videoName.trim() && !isUploading ? handleDrag : undefined}
-                onDrop={videoName.trim() && !isUploading ? handleDrop : undefined}
+                onDragEnter={!isUploading ? handleDrag : undefined}
+                onDragLeave={!isUploading ? handleDrag : undefined}
+                onDragOver={!isUploading ? handleDrag : undefined}
+                onDrop={!isUploading ? handleDrop : undefined}
               >
-                <Upload className={`h-8 w-8 mx-auto mb-2 ${!videoName.trim() ? 'text-gray-300' : 'text-gray-400'}`} />
-                <p className={`text-sm mb-2 ${!videoName.trim() ? 'text-gray-400' : 'text-gray-600'}`}>
-                  {!videoName.trim() 
-                    ? 'Enter a video name first to enable file upload'
-                    : 'Drag and drop a video file here, or click to select'
-                  }
+                <Upload className={`h-8 w-8 mx-auto mb-2 text-gray-400`} />
+                <p className="text-sm mb-2 text-gray-600">
+                  Drag and drop a video file here, or click to select
+                </p>
+                <p className="text-xs text-gray-500 mb-3">
+                  Folder will be created automatically using the video filename
                 </p>
                 <Button
                   variant="outline"
                   onClick={() => fileInputRef.current?.click()}
-                  disabled={!videoName.trim() || isUploading}
+                  disabled={isUploading}
                 >
                   Select Video File
                 </Button>
@@ -886,7 +867,7 @@ export default function IslDatasetPage() {
                   accept="video/*"
                   onChange={handleFileInputChange}
                   className="hidden"
-                  disabled={!videoName.trim() || isUploading}
+                  disabled={isUploading}
                 />
               </div>
               {isUploading && (
@@ -904,12 +885,13 @@ export default function IslDatasetPage() {
                 </div>
               )}
               <div className="text-xs text-gray-500">
-                <p>• Video name is required and cannot contain spaces</p>
-                <p>• Video name will be converted to lowercase automatically</p>
-                <p>• Each video will be saved in its own folder: /isl_dataset_{uploadDatasetType}/&lt;video-name&gt;/</p>
+                <p>• Folder name will be created automatically from video filename</p>
+                <p>• Filename will be sanitized (lowercase, no spaces, special characters removed)</p>
+                <p>• Each video will be saved in its own folder: /isl_dataset_{uploadDatasetType}/&lt;filename&gt;/</p>
                 <p>• Supported formats: MP4, AVI, MOV, WebM</p>
-                <p>• Maximum file size: 100MB</p>
+                <p>• Maximum file size: 3MB</p>
                 <p>• Videos will be automatically preprocessed for optimal compatibility</p>
+                <p>• If folder already exists, you'll be asked to confirm overwrite</p>
               </div>
             </div>
           </DialogContent>

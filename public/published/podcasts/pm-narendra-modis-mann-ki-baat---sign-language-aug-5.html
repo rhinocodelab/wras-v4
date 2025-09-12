@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PM Narendra Modi's Mann Ki Baat - Sign Language | Aug.31, 2025 - PM Modi Mann Ki Baat</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #000000;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            overflow-x: hidden;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            max-width: 100%;
+            width: 100%;
+            padding: 0;
+            text-align: center;
+        }
+
+        .header {
+            margin-bottom: 0;
+            padding: 20px;
+            height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            line-height: 1.2;
+        }
+
+        .video-container {
+            background: transparent;
+            border-radius: 0;
+            padding: 0;
+            margin-bottom: 0;
+            backdrop-filter: none;
+            border: none;
+            box-shadow: none;
+            width: 100%;
+            height: calc(100vh - 120px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .video-player {
+            width: 100%;
+            height: 100%;
+            border-radius: 0;
+            box-shadow: none;
+            margin: 0;
+            display: block;
+            object-fit: contain;
+        }
+
+        .audio-player {
+            position: fixed;
+            top: -1000px;
+            left: -1000px;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+
+        @media (max-width: 768px) {
+            .title {
+                font-size: 2rem;
+            }
+            
+            .header {
+                height: 70px;
+                padding: 15px;
+            }
+            
+            .video-container {
+                height: calc(100vh - 100px);
+            }
+        }
+
+        @media (max-width: 480px) {
+            .title {
+                font-size: 1.5rem;
+            }
+            
+            .header {
+                height: 60px;
+                padding: 10px;
+            }
+            
+            .video-container {
+                height: calc(100vh - 80px);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 class="title">PM Narendra Modi's Mann Ki Baat - Sign Language | Aug.31, 2025</h1>
+        </div>
+
+        <div class="video-container">
+            <video 
+                id="islVideo" 
+                class="video-player" 
+                autoplay 
+                muted
+                playsinline
+                loop
+            >
+                <source src="/podcasts/pm-modi-mann-ki-baat/podcast_episode_1757676218409.mp4" type="video/mp4">
+                Your browser does not support the video tag.
+            </video>
+        </div>
+
+        <audio 
+            id="audioPlayer" 
+            class="audio-player" 
+            autoplay
+            loop
+        >
+            <source src="/podcasts/pm-modi-mann-ki-baat/audio/audio_1757676240034_PM-Modi-Mann-Ki-Baat-125th-Episode (1).mp3" type="audio/mpeg">
+            <source src="/podcasts/pm-modi-mann-ki-baat/audio/audio_1757676240034_PM-Modi-Mann-Ki-Baat-125th-Episode (1).mp3" type="audio/wav">
+            <source src="/podcasts/pm-modi-mann-ki-baat/audio/audio_1757676240034_PM-Modi-Mann-Ki-Baat-125th-Episode (1).mp3" type="audio/aac">
+            Your browser does not support the audio element.
+        </audio>
+    </div>
+
+    <script>
+        const video = document.getElementById('islVideo');
+        const audio = document.getElementById('audioPlayer');
+
+        // Auto-play video (muted) and audio when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            video.play().catch(e => console.log('Video autoplay failed:', e));
+            audio.play().catch(e => console.log('Audio autoplay failed:', e));
+        });
+
+        // Prevent context menu on video
+        video.addEventListener('contextmenu', function(e) {
+            e.preventDefault();
+        });
+    </script>
+</body>
+</html>
