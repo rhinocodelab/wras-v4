@@ -119,9 +119,9 @@ export async function POST(request: NextRequest) {
         .join('\n');
       await writeFile(fileListPath, fileListContent);
 
-      // Stitch videos together
+      // Stitch videos together using fast copy method
       const outputPath = join(sessionDir, `${sanitizedName}_stitched.mp4`);
-      const stitchCommand = `ffmpeg -f concat -safe 0 -i "${fileListPath}" -c:v libx264 -preset fast -crf 23 -an -movflags +faststart -pix_fmt yuv420p "${outputPath}" -y`;
+      const stitchCommand = `ffmpeg -f concat -safe 0 -i "${fileListPath}" -c copy "${outputPath}" -y`;
       
       console.log(`Stitching videos: ${stitchCommand}`);
       try {

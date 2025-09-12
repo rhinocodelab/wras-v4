@@ -1203,9 +1203,9 @@ async function createFinalIslAnnouncementVideo(
 
         // Create a video-only file with optimized settings for smooth playback
         // No audio merging - just clean video that won't get stuck
-        // Use a simpler, more reliable approach for the final video with speed control
+        // Use fast copy method for quick stitching (no re-encoding)
         const speedMultiplier = 1 / playbackSpeed;  // Convert speed to PTS multiplier
-        let ffmpegCommand = `ffmpeg -f concat -safe 0 -i "${tempListPath}" -filter:v "setpts=${speedMultiplier}*PTS" -c:v libx264 -preset fast -crf 23 -an -movflags +faststart -pix_fmt yuv420p "${outputPath}" -y`;
+        let ffmpegCommand = `ffmpeg -f concat -safe 0 -i "${tempListPath}" -c copy "${outputPath}" -y`;
         
         console.log('Executing FFmpeg command for video-only announcement:', ffmpegCommand);
         
@@ -1353,9 +1353,9 @@ async function stitchVideosWithFfmpeg(videoPaths: string[], outputFileName: stri
         const util = require('util');
         const execAsync = util.promisify(exec);
 
-        // Improved FFmpeg command that handles codec compatibility issues
-        // Using libx264 for video and aac for audio ensures maximum compatibility
-        const ffmpegCommand = `ffmpeg -f concat -safe 0 -i "${tempListPath}" -c:v libx264 -preset fast -crf 23 -c:a aac -b:a 192k -movflags +faststart -pix_fmt yuv420p "${outputPath}" -y`;
+        // Fast FFmpeg command using copy mode for quick stitching
+        // This avoids re-encoding and is much faster
+        const ffmpegCommand = `ffmpeg -f concat -safe 0 -i "${tempListPath}" -c copy "${outputPath}" -y`;
         
         console.log('Executing FFmpeg command:', ffmpegCommand);
         
